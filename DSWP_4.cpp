@@ -13,8 +13,16 @@ void DSWP::loopSplit(Loop *L) {
 //		}
 //	}
 
+	allFunc.clear();
+
 	//check for each partition, find relevant blocks, set could auto deduplicate
 	for (int i = 0; i < MAX_THREAD; i++) {
+		//create function to each each thread TODO: decide the argument of the function
+		BasicBlock *header = L->getHeader();
+		Constant * c = header->getParent()->getParent()->getOrInsertFunction("subloop_" + itoa(i), FunctionType::getVoidTy(header->getContext()), NULL);
+		Function *func = cast<Function>(c);
+		func->setCallingConv(CallingConv::C);
+		allFunc.push_back(func);
 
 		//each partition contain several scc
 		map<Instruction *, bool> relinst;
@@ -39,7 +47,7 @@ void DSWP::loopSplit(Loop *L) {
 		map<BasicBlock *, BasicBlock *> BBMap;	//map the old block to new block
 		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
-			BBMap[BB] = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i));
+			BBMap[BB] = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i), func);
 		}
 
 		IRBuilder<> Builder(getGlobalContext());
@@ -61,14 +69,18 @@ void DSWP::loopSplit(Loop *L) {
 				}
 
 				//TODO check if there are two branch, one branch is not in the partition, then what the branch
+
 				//instruction will be
 				for (unsigned j = 0; j < newInst->getNumOperands(); j++) {
 					Value *op = newInst->getOperand(j);
 					if (BasicBlock *oldBB = dyn_cast<BasicBlock>(op)) {
 						BasicBlock * newBB = BBMap[oldBB];
-						if (newBB == NULL) {
-							//TODO find the nearest post-dominator
+						while (newBB == NULL) {
+							//TODO find the nearest post-dominator (not sure it is correct)
+							oldBB = pre[oldBB];
+							newBB = BBMap[oldBB];
 						}
+
 						newInst->setOperand(j, newBB);
 					}
 				}
@@ -76,5 +88,7 @@ void DSWP::loopSplit(Loop *L) {
 				NBB->getInstList().insertAfter(NBB->getInstList().end(), newInst);
 			}
 		}// for add instruction
+
+		//TODO insert function call here
 	}
 }

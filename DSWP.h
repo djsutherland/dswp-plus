@@ -117,6 +117,8 @@ namespace {
 		//part 4: code splitting
 		void loopSplit(Loop *L);
 
+		//the new functions (has already been inserted, waiting for syn)
+		vector<Function *> allFunc;
 
 	public:
 		static char ID;
