@@ -120,6 +120,9 @@ namespace {
 		//the new functions (has already been inserted, waiting for syn)
 		vector<Function *> allFunc;
 
+    // part 5: synchronization insertion
+    void insertSynchronization();
+
 	public:
 		static char ID;
 		DSWP();
