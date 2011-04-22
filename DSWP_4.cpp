@@ -12,6 +12,13 @@ void DSWP::loopSplit(Loop *L) {
 //			Instruction *inst = &(*ii);
 //		}
 //	}
+	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
+	BasicBlock *header = L->getHeader();
+	BasicBlock *exit = L->getExitBlock();
+
+	if (exit == NULL) {
+		error("exit not unique! have to think about this");
+	}
 
 	allFunc.clear();
 

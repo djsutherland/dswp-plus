@@ -12,7 +12,7 @@ void DSWP::insertSynchronization() {
   // pointers to the waiting threads)
 
   // remaining functions are auxiliary
-  for (int i = 1; i < this->allFunc.size(); i++) {
+  for (unsigned i = 1; i < this->allFunc.size(); i++) {
     Function *curr = this->allFunc[i];
     // check each instruction and insert flows
     

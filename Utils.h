@@ -14,6 +14,8 @@ using namespace llvm;
 using namespace std;
 
 string itoa(int i);
+void error(char * info);
+void error(string info);
 
 class Utils {
 private:

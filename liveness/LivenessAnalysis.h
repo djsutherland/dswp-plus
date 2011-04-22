@@ -41,7 +41,7 @@ public:
 
 	void setDefinitionVector(vector<Value *> allDef) {
 		this->allDef = allDef;
-		for (int i = 0; i < allDef.size(); i++) {
+		for (unsigned i = 0; i < allDef.size(); i++) {
 			defIndex[allDef[i]] = i;
 		}
 	}
@@ -147,6 +147,18 @@ public:
 
 	virtual bool isFoward() {
 		return false;
+	}
+
+	bool isVaribleLiveIn(Value * var, Value* position) {
+		int index = defIndex[var];
+		DFAValue value = in[position];
+		return value.get(index);
+	}
+
+	bool isVaribleLiveOut(Value * var, Value* position) {
+		int index = defIndex[var];
+		DFAValue value = out[position];
+		return value.get(index);
 	}
 };
 

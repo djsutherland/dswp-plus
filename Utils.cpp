@@ -1,5 +1,6 @@
 #include "Utils.h"
-
+#include <iostream>
+#include <cstdio>
 #include <sstream>
 
 using namespace std;
@@ -9,6 +10,15 @@ string itoa(int i) {
     out << i;
     return out.str();
 }
+
+void error(char *info) {
+	printf("%s\n", info);
+}
+
+void error(string info) {
+	printf("%s\n", info.c_str());
+}
+
 
 int Utils::id = 0;
 
