@@ -22,6 +22,7 @@ void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<PostDominatorTree>();
     AU.addRequired<AliasAnalysis>();
     AU.addRequired<MemoryDependenceAnalysis>();
+    AU.addRequired<LivenessAnalysis>();
 }
 
 bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
