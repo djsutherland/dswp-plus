@@ -5,6 +5,7 @@
 using namespace llvm;
 using namespace std;
 
+
 void DSWP::threadPartition(Loop *L) {
 	//1. get total latency and latency for
 
@@ -26,6 +27,9 @@ void DSWP::threadPartition(Loop *L) {
 	}
 
 	int averLatency = totalLatency / MAX_THREAD;
+
+	cout << "latency info:" << totalLatency << " " << averLatency << endl;
+
 	for (int i = 0; i < sccNum; i++)
 		assigned.push_back(-2);
 	//-2: not assigned, and not in queue
@@ -48,14 +52,16 @@ void DSWP::threadPartition(Loop *L) {
 			//update the list
 			for (unsigned j = 0; j < dag[top.u]->size(); j++) {
 				int v = dag[top.u]->at(j);
-				if (assigned[j] > -2)
+				if (assigned[v] > -2)
 					continue;
-				assigned[j] = -1;
+				assigned[v] = -1;
 				Q.push(QNode(v, sccLatency[v]));
 			}
 			//check load balance
-			if (estLatency[i] >= averLatency)
+			if (estLatency[i] >= averLatency) {
+				//cout << estLatency[i] << endl;
 				break;
+			}
 		}
 	}
 	//following is impossible since every time I let it bigger that aver
@@ -67,6 +73,7 @@ void DSWP::threadPartition(Loop *L) {
 		part[i].clear();
 
 	for (int i = 0; i < sccNum; i++) {
+	//	cout << i << "  " << assigned[i] << endl;
 		part[assigned[i]].push_back(i);
 	}
 }
@@ -74,7 +81,7 @@ void DSWP::threadPartition(Loop *L) {
 int DSWP::getLatency(Instruction *I) {
 	int opcode = I->getOpcode();
 
-	//copy from dswp583 google project site
+	//copy from dswp583 google project site TODO this table is obviously not right!
 	int cost;
     // These are instruction latencies for an AMD K10
     // (Well, most of them are, some I just made up)
@@ -137,4 +144,3 @@ int DSWP::getLatency(Instruction *I) {
 
     return (cost);
 }
-

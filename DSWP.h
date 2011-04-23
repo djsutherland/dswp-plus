@@ -104,10 +104,13 @@ namespace {
 		//part 3: thread partition
 		void threadPartition(Loop *L);
 
+		//get the latency estimate of a instruction
 		int getLatency(Instruction *I);
 
+		//assigned[i] = node i in dag has been assgined to assigned[i] thread
 		vector<int> assigned;
 
+		//part[i] = i thread contains part[i] nodes of the dag
 		vector<int> part[MAX_THREAD];
 		set<BasicBlock *> BBS[MAX_THREAD];
 
@@ -129,8 +132,13 @@ namespace {
 		//show DAC information
 		void showDAG(Loop *L);
 
+		//show partition
+		void showPartition(Loop *L);
+
 		Utils util;
-		map<Instruction *, string> dname;	//use  to denote instruction name in convient of debugging
+
+		//give each instruction a name, including terminator instructions (which can not be setName)
+		map<Instruction *, string> dname;
 
 		void initilize(Loop *L);
 
