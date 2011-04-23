@@ -126,8 +126,13 @@ namespace {
 		//test function
 		void showGraph(Loop *L);
 
+		//show DAC information
+		void showDAG(Loop *L);
+
 		Utils util;
 		map<Instruction *, string> dname;	//use  to denote instruction name in convient of debugging
+
+		void initilize(Loop *L);
 
 	public:
 		static char ID;

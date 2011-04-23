@@ -91,8 +91,9 @@ void DSWP::buildPDG(Loop *L) {
 
 	//begin control dependence
 	//initialize pre
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-		BasicBlock *BB = *bi;
+	Function *fun = L->getHeader()->getParent();
+	for (Function::iterator bi = fun->begin(); bi != fun->end(); bi++) {
+		BasicBlock *BB = bi;
 		DomTreeNode *dn = pdt.getNode(BB);
 
 		for (DomTreeNode::iterator di = dn->begin(); di != dn->end(); di++) {
@@ -100,6 +101,8 @@ void DSWP::buildPDG(Loop *L) {
 			pre[CB] = BB;
 		}
 	}
+
+
 
 	//TODO check edge exist
 	//TODO the special kind of dependence need loop peeling ? I don't know whether this is needed

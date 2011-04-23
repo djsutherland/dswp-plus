@@ -17,6 +17,11 @@ RegisterPass<DSWP> X("dswp", "15745 Decoupled Software Pipeline");
 DSWP::DSWP() : LoopPass (ID){
 }
 
+bool DSWP::doInitialization(Loop *, LPPassManager &LPM) {
+//	cout << "can you see that?" << endl;
+	return true;
+}
+
 void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<LoopInfo>();
     AU.addRequired<DominatorTree>();
@@ -24,6 +29,10 @@ void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<AliasAnalysis>();
     AU.addRequired<MemoryDependenceAnalysis>();
   //  AU.addRequired<LivenessAnalysis>();
+}
+
+void DSWP::initilize(Loop *L) {
+
 }
 
 bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
@@ -34,8 +43,9 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 
 	buildPDG(L);
 	showGraph(L);
-	//findSCC(L);
-	//buildDAG(L);
+	findSCC(L);
+	buildDAG(L);
+	showDAG(L);
 	//threadPartition(L);
 	//loopSplit(L);
 	return true;
@@ -72,20 +82,23 @@ void DSWP::addControlDependence(BasicBlock *a, BasicBlock *b) {
 void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTree &pdt) {
 	BasicBlock *lca = pdt.findNearestCommonDominator(a, b);
 
+	cout << a->getNameStr() << " " << b->getNameStr() << " " << lca->getNameStr() << endl;
+
 	if (lca == pre[a]) {	//case 1
 		BasicBlock *BB = b;
 		while (BB != lca) {
 			addControlDependence(a, BB);
 			BB = pre[BB];
 		}
-	}
-
-	if (lca == a) {	//case 2
+	} else if (lca == a) {	//case 2: capture loop dependence
 		BasicBlock *BB = b;
 		while (BB != pre[a]) {
+			cout << "\t" << a->getNameStr() << " " << BB->getNameStr() << endl;
 			addControlDependence(a, BB);
 			BB = pre[BB];
 		}
+	} else {
+		error("unknow case in checkControlDependence!");
 	}
 }
 
@@ -95,9 +108,14 @@ void DSWP::buildPDG(Loop *L) {
 		BasicBlock *BB = *bi;
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
 			Instruction *inst = &(*ui);
-		//	if (!inst->hasName()) {			//insert names for each expr to ensure
-		//		inst->setName(util.genId());
-		//	}
+
+			//standardlize the name for all expr
+			if (util.hasNewDef(inst)) {
+				inst->setName(util.genId());
+				dname[inst] = inst->getNameStr();
+			} else {
+				dname[inst] = util.genId();
+			}
 
 			pdg[inst] = new vector<Edge>();
 			rev[inst] = new vector<Edge>();
@@ -151,32 +169,135 @@ void DSWP::buildPDG(Loop *L) {
 
 	//begin control dependence
 	//initialize pre
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-		BasicBlock *BB = *bi;
+
+	//cout << pdt.getRootNode()->getBlock()->getNameStr() << endl;
+	//for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+	Function *fun = L->getHeader()->getParent();
+	for (Function::iterator bi = fun->begin(); bi != fun->end(); bi++) {
+		BasicBlock *BB = bi;
 		DomTreeNode *dn = pdt.getNode(BB);
 
 		for (DomTreeNode::iterator di = dn->begin(); di != dn->end(); di++) {
-			BasicBlock *CB = (*di)->getBlock();	//TODO NOT SURE HERE IS RIGTH
+			BasicBlock *CB = (*di)->getBlock();
 			pre[CB] = BB;
 		}
 	}
 
+	//TODO add dependency within a basicblock
+
+
+	//edn control dependece
+
 	//TODO check edge exist
 	//TODO the special kind of dependence need loop peeling ? I don't know whether this is needed
-	//TODO consider how to deal with phi node
+	//TODO consider how to deal with phi node, now there is no phi node
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
 		for (succ_iterator PI = succ_begin(BB); PI != succ_end(BB); ++PI) {
 			BasicBlock *succ = *PI;
+
 			checkControlDependence(BB, succ, pdt);
 		}
 	}
 	//end control dependence
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void DSWP::findSCC(Loop *L) {
+	used.clear();
+
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *inst = &(*ui);
+			if (!used[inst]) {
+				dfs1(inst);
+			}
+		}
+	}
+
+	used.clear();
+	sccNum = 0;
+
+	for (int i = list.size() - 1; i >= 0; i --) {
+		Instruction *inst = list[i];
+		if (!used[inst]) {
+			dfs2(inst);
+			sccNum++;
+		}
+	}
+}
+
+void DSWP::dfs1(Instruction *I) {
+	used[I] = true;
+	for (vector<Edge>::iterator ei = pdg[I]->begin(); ei != pdg[I]->end(); ei++) {
+		Instruction *next = ei->v;
+		if (!used[next])
+			dfs1(next);
+	}
+	list.push_back(I);
+}
+
+void DSWP::dfs2(Instruction *I) {
+	used[I] = true;
+	for (vector<Edge>::iterator ei = rev[I]->begin(); ei != rev[I]->end(); ei++) {
+		Instruction *next = ei->v;
+		if (!used[next])
+			dfs1(next);
+	}
+	sccId[I] = sccNum;
+}
+
+void DSWP::buildDAG(Loop *L) {
+
+	for (int i = 0; i < sccNum; i++) {
+		dag[i] = new vector<int>();
+	}
+
+	map<int, map<int, bool> > added;
+
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *I = &(*ui);
+			for (vector<Edge>::iterator ei = pdg[I]->begin(); ei != pdg[I]->end(); ei++) {
+				Instruction *next = ei->v;
+
+				int u = sccId[I];
+				int v = sccId[next];
+
+				//it is possible the edge has already been added
+				if (!added[u][v]) {
+					dag[u]->push_back(v);
+					added[u][v] = true;
+				}
+			}
+		}
+	}
+
+	//store InstInSCC, vector store all the inst for a scc
+	InstInSCC.clear();
+	for (int i = 0; i < sccNum; i++)
+		InstInSCC.push_back(vector<Instruction *>());
+
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *I = &(*ui);
+			InstInSCC[sccId[I]].push_back(I);
+		}
+	}
+}
+
+
 /////////////////////////////////////////////test function/////////////////////////////////////////////////////
 
 void DSWP::showGraph(Loop *L) {
+	cout << L->getHeader()->getNameStr() << endl;
+	cout << L->getBlocks().size() << endl;
+
+
 	std::string name = "showgraph";
 	ofstream file((name.c_str()));
 	raw_os_ostream ost(file);
@@ -187,17 +308,44 @@ void DSWP::showGraph(Loop *L) {
 			Instruction *inst = &(*ui);
 			vector<Edge> * edges = pdg[inst];
 
-			ost << *inst << ":\n";
+			ost << dname[inst] << " " << *inst << ":\n";
 			ost << "\t";
 			for (vector<Edge>::iterator ei = edges->begin(); ei != edges->end(); ei ++) {
-				ost << *(ei->v) << "[" << ei->dtype << "]\t";
+				ost << dname[(ei->v)] << "[" << ei->dtype << "]\t";
 			}
 			ost << "\n\n";
 		}
 	}
 }
 
-bool DSWP::doInitialization(Loop *, LPPassManager &LPM) {
-//	cout << "can you see that?" << endl;
-	return true;
+void DSWP::showDAG(Loop *L) {
+	std::string name = "dag";
+	ofstream file((name.c_str()));
+	raw_os_ostream ost(file);
+
+	ost << "num:" << sccNum << "\n";
+
+	for (int i = 0; i < sccNum; i++) {
+
+		ost << "instruction in SCC " << i << ":";
+
+		vector<Instruction *> insts = this->InstInSCC[i];
+		for (vector<Instruction *>::iterator ii = insts.begin(); ii != insts.end(); ii++) {
+			Instruction *inst = *ii;
+			ost << dname[inst] << " ";
+		}
+		ost << "\n";
+
+		ost << "adjacent scc" << ":";
+
+		vector<int> *edges = this->dag[i];
+		for (unsigned i = 0; i < edges->size(); i++) {
+			ost << edges->at(i) << " ";
+		}
+		ost << "\n";
+	}
+
+
 }
+
+
