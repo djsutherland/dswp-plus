@@ -45,7 +45,7 @@ void DSWP::dfs2(Instruction *I) {
 	for (vector<Edge>::iterator ei = rev[I]->begin(); ei != rev[I]->end(); ei++) {
 		Instruction *next = ei->v;
 		if (!used[next])
-			dfs1(next);
+			dfs2(next);
 	}
 	sccId[I] = sccNum;
 }
@@ -69,7 +69,7 @@ void DSWP::buildDAG(Loop *L) {
 				int v = sccId[next];
 
 				//it is possible the edge has already been added
-				if (!added[u][v]) {
+				if (!added[u][v] && u != v) {
 					dag[u]->push_back(v);
 					added[u][v] = true;
 				}

@@ -186,7 +186,7 @@ void DSWP::buildPDG(Loop *L) {
 	//TODO add dependency within a basicblock
 
 
-	//edn control dependece
+	//end control dependece
 
 	//TODO check edge exist
 	//TODO the special kind of dependence need loop peeling ? I don't know whether this is needed
@@ -244,7 +244,7 @@ void DSWP::dfs2(Instruction *I) {
 	for (vector<Edge>::iterator ei = rev[I]->begin(); ei != rev[I]->end(); ei++) {
 		Instruction *next = ei->v;
 		if (!used[next])
-			dfs1(next);
+			dfs2(next);
 	}
 	sccId[I] = sccNum;
 }
@@ -268,7 +268,7 @@ void DSWP::buildDAG(Loop *L) {
 				int v = sccId[next];
 
 				//it is possible the edge has already been added
-				if (!added[u][v]) {
+				if (!added[u][v] && u != v) {
 					dag[u]->push_back(v);
 					added[u][v] = true;
 				}
@@ -327,7 +327,7 @@ void DSWP::showDAG(Loop *L) {
 
 	for (int i = 0; i < sccNum; i++) {
 
-		ost << "instruction in SCC " << i << ":";
+		ost << "SCC " << i << ":";
 
 		vector<Instruction *> insts = this->InstInSCC[i];
 		for (vector<Instruction *>::iterator ii = insts.begin(); ii != insts.end(); ii++) {
@@ -336,7 +336,7 @@ void DSWP::showDAG(Loop *L) {
 		}
 		ost << "\n";
 
-		ost << "adjacent scc" << ":";
+		ost << "\tadjacent scc" << ":";
 
 		vector<int> *edges = this->dag[i];
 		for (unsigned i = 0; i < edges->size(); i++) {
@@ -344,8 +344,6 @@ void DSWP::showDAG(Loop *L) {
 		}
 		ost << "\n";
 	}
-
-
 }
 
 
