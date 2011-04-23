@@ -108,7 +108,6 @@ namespace {
 
 		vector<int> assigned;
 
-
 		vector<int> part[MAX_THREAD];
 		set<BasicBlock *> BBS[MAX_THREAD];
 
@@ -121,14 +120,21 @@ namespace {
 		//the new functions (has already been inserted, waiting for syn)
 		vector<Function *> allFunc;
 
-    // part 5: synchronization insertion
-    void insertSynchronization();
+		// part 5: synchronization insertion
+		void insertSynchronization();
+
+		//test function
+		void showGraph(Loop *L);
+
+		Utils util;
+		map<Instruction *, string> dname;	//use  to denote instruction name in convient of debugging
 
 	public:
 		static char ID;
 		DSWP();
 		virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 		virtual bool runOnLoop(Loop *L, LPPassManager &LPM);
+		virtual bool doInitialization(Loop *, LPPassManager &LPM);
 		//virtual bool doFinalization();
 	};
 }

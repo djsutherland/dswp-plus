@@ -1,9 +1,5 @@
-/*
- * LivenessAnalysis.cpp
- *
- *  Created on: Jan 29, 2011
- *      Author: Fuyao Zhao, Mark Hahnenberg
- */
+#ifndef LIVE_H_
+#define LIVE_H_
 
 #include "DFAFramework.h"
 #include "llvm/Support/InstIterator.h"
@@ -18,8 +14,6 @@
 
 using namespace std;
 using namespace llvm;
-
-namespace {
 
 class LivenessAnalysis: public FunctionPass, public DFAFramework {
 private:
@@ -162,6 +156,5 @@ public:
 	}
 };
 
-char LivenessAnalysis::ID = 0;
-RegisterPass<LivenessAnalysis> X("liveness", "15745: liveness Analysis");
-}
+
+#endif
