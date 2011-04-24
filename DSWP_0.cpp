@@ -1,10 +1,6 @@
 //include the public part of DSWP
 #include "DSWP.h"
 
-#include "DSWP_1.cpp"
-#include "DSWP_2.cpp"
-#include "DSWP_4.cpp"
-
 using namespace llvm;
 using namespace std;
 
