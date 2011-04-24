@@ -16,20 +16,23 @@ void DSWP::addControlDependence(BasicBlock *a, BasicBlock *b) {
 void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTree &pdt) {
 	BasicBlock *lca = pdt.findNearestCommonDominator(a, b);
 
+	cout << a->getNameStr() << " " << b->getNameStr() << " " << lca->getNameStr() << endl;
+
 	if (lca == pre[a]) {	//case 1
 		BasicBlock *BB = b;
 		while (BB != lca) {
 			addControlDependence(a, BB);
 			BB = pre[BB];
 		}
-	}
-
-	if (lca == a) {	//case 2
+	} else if (lca == a) {	//case 2: capture loop dependence
 		BasicBlock *BB = b;
 		while (BB != pre[a]) {
+			cout << "\t" << a->getNameStr() << " " << BB->getNameStr() << endl;
 			addControlDependence(a, BB);
 			BB = pre[BB];
 		}
+	} else {
+		error("unknow case in checkControlDependence!");
 	}
 }
 
@@ -39,6 +42,15 @@ void DSWP::buildPDG(Loop *L) {
 		BasicBlock *BB = *bi;
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
 			Instruction *inst = &(*ui);
+
+			//standardlize the name for all expr
+			if (util.hasNewDef(inst)) {
+				inst->setName(util.genId());
+				dname[inst] = inst->getNameStr();
+			} else {
+				dname[inst] = util.genId();
+			}
+
 			pdg[inst] = new vector<Edge>();
 			rev[inst] = new vector<Edge>();
 		}
@@ -83,34 +95,52 @@ void DSWP::buildPDG(Loop *L) {
 						addEdge(dep, inst, DOUT);	//WRITE AFTER WRITE
 					}
 				}
+				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
 			//end memory dependence
 		}//for ii
 	}//for bi
 
-
 	//begin control dependence
 	//initialize pre
+
+	//cout << pdt.getRootNode()->getBlock()->getNameStr() << endl;
+	//for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 	Function *fun = L->getHeader()->getParent();
 	for (Function::iterator bi = fun->begin(); bi != fun->end(); bi++) {
 		BasicBlock *BB = bi;
 		DomTreeNode *dn = pdt.getNode(BB);
 
 		for (DomTreeNode::iterator di = dn->begin(); di != dn->end(); di++) {
-			BasicBlock *CB = (*di)->getBlock();	//TODO NOT SURE HERE IS RIGTH
+			BasicBlock *CB = (*di)->getBlock();
 			pre[CB] = BB;
 		}
 	}
 
+	//add dependency within a basicblock
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		Instruction *pre = NULL;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *inst = &(*ui);
+			if (pre != NULL) {
+				addEdge(pre, inst, CONTROL);
+			}
+			pre = inst;
+		}
+	}
 
+
+	//end control dependece
 
 	//TODO check edge exist
 	//TODO the special kind of dependence need loop peeling ? I don't know whether this is needed
-	//TODO consider how to deal with phi node
+	//TODO consider how to deal with phi node, now there is no phi node
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
 		for (succ_iterator PI = succ_begin(BB); PI != succ_end(BB); ++PI) {
 			BasicBlock *succ = *PI;
+
 			checkControlDependence(BB, succ, pdt);
 		}
 	}

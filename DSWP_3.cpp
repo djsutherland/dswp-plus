@@ -5,7 +5,6 @@
 using namespace llvm;
 using namespace std;
 
-
 void DSWP::threadPartition(Loop *L) {
 	//1. get total latency and latency for
 
@@ -88,7 +87,7 @@ int DSWP::getLatency(Instruction *I) {
     switch (opcode) {
         // Terminator instructions
         case 1: cost=2; break;          // Return
-        case 2: cost=3; break;          // Branch
+        case 2: cost=3; break;          // Branch   //TODO NOT RIGHT
         case 3: cost=3; break;          // Switch
 
                 // Standard binary operators

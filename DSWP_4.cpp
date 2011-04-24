@@ -4,6 +4,7 @@
 
 using namespace llvm;
 using namespace std;
+//TODO add parameters for functions !!!
 
 void DSWP::loopSplit(Loop *L) {
 //	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
@@ -12,7 +13,7 @@ void DSWP::loopSplit(Loop *L) {
 //			Instruction *inst = &(*ii);
 //		}
 //	}
-	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
+
 	BasicBlock *header = L->getHeader();
 	BasicBlock *exit = L->getExitBlock();
 
@@ -20,15 +21,27 @@ void DSWP::loopSplit(Loop *L) {
 		error("exit not unique! have to think about this");
 	}
 
+	getLiveinfo(L);
+
 	allFunc.clear();
+
+	//prepare the arguments and function Type
+	vector<const Type*> argTypes;
+	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it++) {
+		Value *val = * it;
+		const Type *vType = val->getType();			//the type of the val
+		//const Type *aType = vType;					//the type of the ptr to the val
+		argTypes.push_back(vType);
+	}
+	FunctionType  *fType = FunctionType::get(Type::getVoidTy(header->getContext()), argTypes, false);
 
 	//check for each partition, find relevant blocks, set could auto deduplicate
 	for (int i = 0; i < MAX_THREAD; i++) {
-		//create function to each each thread TODO: decide the argument of the function
-		BasicBlock *header = L->getHeader();
-		Constant * c = header->getParent()->getParent()->getOrInsertFunction("subloop_" + itoa(i), FunctionType::getVoidTy(header->getContext()), NULL);
+		//create function to each each thread
+		Constant * c = header->getParent()->getParent()->getOrInsertFunction("subloop_" + itoa(i), fType);	//they both have same function type
 		Function *func = cast<Function>(c);
 		func->setCallingConv(CallingConv::C);
+
 		allFunc.push_back(func);
 
 		//each partition contain several scc
@@ -54,10 +67,15 @@ void DSWP::loopSplit(Loop *L) {
 		map<BasicBlock *, BasicBlock *> BBMap;	//map the old block to new block
 		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
-			BBMap[BB] = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i), func);
+			BasicBlock *NBB = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i), func);
+			BBMap[BB] = NBB;
+			if (BB == header) {
+				//TODO ensure it is in the first of the block
+				//NBB->mo
+			}
 		}
 
-		IRBuilder<> Builder(getGlobalContext());
+		//IRBuilder<> Builder(getGlobalContext());
 
 		//add instruction
 		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
@@ -70,6 +88,7 @@ void DSWP::loopSplit(Loop *L) {
 				Instruction *newInst;
 				if (isa<TerminatorInst>(inst)) {//copy the teminatorInst since they could be used mutiple times
 					newInst = inst->clone();
+					termMap[inst].push_back(newInst);
 				} else {
 					newInst = inst;
 					inst->removeFromParent();
@@ -83,7 +102,7 @@ void DSWP::loopSplit(Loop *L) {
 					if (BasicBlock *oldBB = dyn_cast<BasicBlock>(op)) {
 						BasicBlock * newBB = BBMap[oldBB];
 						while (newBB == NULL) {
-							//TODO find the nearest post-dominator (not sure it is correct)
+							//find the nearest post-dominator (TODO not sure it is correct)
 							oldBB = pre[oldBB];
 							newBB = BBMap[oldBB];
 						}
@@ -95,7 +114,88 @@ void DSWP::loopSplit(Loop *L) {
 				NBB->getInstList().insertAfter(NBB->getInstList().end(), newInst);
 			}
 		}// for add instruction
+	}
 
-		//TODO insert function call here
+	//remove the old instruction and blocks in loop, basically only header should remain
+	for (Loop::block_iterator bi = L->block_begin(); bi != L->block_end(); bi++) {
+		BasicBlock * BB = *bi;
+		BB->getTerminator()->removeFromParent();
+
+		if (BB->getInstList().size() > 0) {
+			error("check remove process of loop split");
+		}
+
+		if (BB == header) {
+			BranchInst::Create(exit, header);
+		} else {
+			BB->removeFromParent();
+		}
+	}
+
+	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
+//	Instruction *allocPos = func->getEntryBlock().getTerminator();
+//
+//	vector<StoreInst *> stores;
+//	for (set<Value *>::iterator vi = defin.begin(); vi != defin.end(); vi++) {	//TODO: is defin enough
+//		Value *val = *vi;
+//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
+//		varToMem[val] = arg;
+//	}
+
+	//TODO insert function call here
+
+//		//load back the live out
+//
+//		for (set<Value *>::iterator vi = liveout.begin(); vi != liveout.end(); vi++) {
+//			Value *val = *vi;
+//			Value *ptr = args[val];
+//			LoadInst * newVal = new LoadInst(ptr, val->getNameStr() + "_new", insPos);
+//
+//
+//			for (use_iterator ui = val->use_begin(); ui != val->use_end(); ui++) {
+//
+//		}
+}
+
+void DSWP::getLiveinfo(Loop * L) {
+	//currently I don't want to use standard liveness analysis
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *inst = &(*ui);
+			if (util.hasNewDef(inst)) {
+				defin.insert(inst);
+			}
+		}
+	}
+
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *inst = &(*ui);
+
+			for (Instruction::op_iterator oi = inst->op_begin(); oi != inst->op_end(); oi++) {
+				Value *op = *oi;
+				if (defin.find(op) == defin.end()) {
+					livein.insert(op);
+				}
+			}
+		}
+	}
+	//so basically I add variables used in loop but not been declared in loop as live variable
+
+	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout
+	liveout = livein;
+	liveout.insert(defin.begin(), defin.end());
+
+	//now we can delete those in liveout but is not really live outside the loop
+	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
+	BasicBlock *exit = L->getExitBlock();
+
+	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it = it2) {
+		it2 = it; it2 ++;
+		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
+			liveout.erase(it);
+		}
 	}
 }

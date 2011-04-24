@@ -49,13 +49,8 @@ namespace {
 	struct QNode {
 		int u;
 		int latency;
-		QNode(int u, int latency) {
-			this->u = u;
-			this->latency = latency;
-		}
-		bool operator < (const QNode &y) const {
-			return latency < y.latency;
-		}
+		QNode(int u, int latency);
+		bool operator < (const QNode &y) const;
 	};
 
 	class DSWP: public LoopPass {
