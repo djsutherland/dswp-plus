@@ -3,7 +3,7 @@
 #include "sync.h"
 
 pthread_t threads[NUM_THREADS];
-queue_t queues[NUM_THREADS];
+queue_t queues[NUM_QUEUES];
 
 static void *jump_to_func(void *arg) {
   thread_id_t tid = (thread_id_t)arg;
@@ -22,10 +22,10 @@ void sync_init() {
   }
 }
 
-void sync_produce(thread_id_t tid, void *elem) {
-  queue_push(&queues[tid], elem);
+void sync_produce(void *elem, value_id_t vid) {
+  queue_push(&queues[vid], elem);
 }
 
-void *sync_consume(thread_id_t tid) {
-  return queue_pop(&queues[tid]);
+void *sync_consume(value_id_t vid) {
+  return queue_pop(&queues[vid]);
 }
