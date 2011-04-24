@@ -464,13 +464,23 @@ void DSWP::loopSplit(Loop *L) {
 
 	allFunc.clear();
 
+	//prepare the arguments and function Type
+	vector<const Type*> argTypes;
+	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it++) {
+		Value *val = * it;
+		const Type *vType = val->getType();			//the type of the val
+		const Type *aType = vType;					//TODO: the type of the ptr to the val
+		argTypes.push_back(aType);
+	}
+	FunctionType  *fType = FunctionType::get(Type::getVoidTy(header->getContext()), argTypes, false);
+
 	//check for each partition, find relevant blocks, set could auto deduplicate
 	for (int i = 0; i < MAX_THREAD; i++) {
-		//create function to each each thread TODO: decide the argument of the function
-		BasicBlock *header = L->getHeader();
-		Constant * c = header->getParent()->getParent()->getOrInsertFunction("subloop_" + itoa(i), FunctionType::getVoidTy(header->getContext()), NULL);
+		//create function to each each thread
+		Constant * c = header->getParent()->getParent()->getOrInsertFunction("subloop_" + itoa(i), fType);	//they both have same function type
 		Function *func = cast<Function>(c);
 		func->setCallingConv(CallingConv::C);
+
 		allFunc.push_back(func);
 
 		//each partition contain several scc
@@ -538,6 +548,26 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}// for add instruction
 
+		//TODO remove the old instruction and blocks in loop, basically only header should remain
+
+
+
+		//insert store instruction (store register value to memory), now I insert them into the beginning of the function
+		BasicBlock *funEntry = & (header->getParent()->getEntryBlock());
+		Instruction *allocPos = funEntry->getTerminator();
+		Instruction *storePos = header->getTerminator();
+
+		vector<AllocaInst *> args;
+		vector<StoreInst *> stores;
+		for (set<Value *>::iterator vi = livein.begin(); vi != livein.end(); vi++) {
+			Value *val = *vi;
+			AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
+			StoreInst * storeArg = new StoreInst(val, arg, storePos);
+
+			args.push_back(arg);
+			stores.push_back(storeArg);
+		}
+
 		//TODO insert function call here
 	}
 }
@@ -577,7 +607,7 @@ void DSWP::getLiveinfo(Loop * L) {
 	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
 	BasicBlock *exit = L->getExitBlock();
 
-	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); ) {
+	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it = it2) {
 		it2 = it; it2 ++;
 		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
 			liveout.erase(it);
