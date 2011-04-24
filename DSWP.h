@@ -15,7 +15,7 @@
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/LLVMContext.h"
-#include "liveness/LivenessAnalysis.h"
+#include "LivenessAnalysis.h"
 
 #include "Utils.h"
 
