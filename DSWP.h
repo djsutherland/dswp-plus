@@ -123,6 +123,12 @@ namespace {
 		//the new functions (has already been inserted, waiting for syn)
 		vector<Function *> allFunc;
 
+		//get live variable infomration
+		void getLiveinfo(Loop * L);
+		set<Value *> livein;	//live in variable
+		set<Value *> defin;		//Variable generate in the loop
+		set<Value *> liveout;
+
 		// part 5: synchronization insertion
 		void insertSynchronization();
 
