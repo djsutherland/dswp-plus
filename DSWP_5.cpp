@@ -64,16 +64,13 @@ void DSWP::insertSynDependecy(Loop *L) {
 	}
 }
 
-void DSWP::insertProduce(Instruction * inst, int channel) {
+void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int channel) {
 	Function *fun = module->getFunction("sync_produce");
 	vector<Value*> args;
 
-	//TODO : check the type
-	AllocaInst * alloc = new AllocaInst(Type::getInt8PtrTy(*context), 0, inst->getNameStr() + "_ptr");
-	StoreInst * store = new StoreInst(inst, alloc);
+	BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
 
-	alloc->insertAfter(inst);
-	store->insertAfter(alloc);
+	cast->insertAfter(u);
 
 	args.push_back(alloc);
 	args.push_back(ConstantInt::get(Type::getInt8PtrTy(*context), channel));
@@ -83,21 +80,6 @@ void DSWP::insertProduce(Instruction * inst, int channel) {
 	call->insertAfter(store);
 }
 
-void DSWP::insertConsume(Instruction * inst, int channel) {
-	Function *fun = module->getFunction("sync_consume");
+void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int channel) {
 
-	vector<Value*> args;
-
-	AllocaInst * alloc = new AllocaInst(Type::getInt8Ty(*context), 0, inst->getNameStr() + "_ptr");
-	StoreInst * store = new StoreInst(inst, alloc);
-
-	alloc->insertBefore(inst);
-	store->insertBefore(alloc);
-
-	args.push_back(alloc);
-	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
-
-	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
-
-	call->insertBefore(inst);
 }

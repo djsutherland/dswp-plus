@@ -3,6 +3,7 @@ will the getAnalysis be execute lazily? (seems yes)
 need to understand how to insert external function call (see tutorial) and link?
 Function::Create(FT, Function::ExternalLinkage, Name, TheModule);
 
+carefully deduplicate the dependency
 
 if there is a dependency for branch
 queue prepare in llvm

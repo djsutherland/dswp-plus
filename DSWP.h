@@ -153,9 +153,9 @@ namespace {
 
 		void insertSynchronization(Loop *L);
 
-		void insertProduce(Instruction * inst, int channel);
+		void insertProduce(Instruction * u, Instruction *v, DType dtype, int channel);
 
-		void insertConsume(Instruction * inst, int channel);
+		void insertConsume(Instruction * u, Instruction *v, DType dtype, int channel) ;
 
 		//test function
 		void showGraph(Loop *L);
