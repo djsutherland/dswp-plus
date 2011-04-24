@@ -68,15 +68,18 @@ void DSWP::insertProduce(Instruction * inst, int channel) {
 	Function *fun = module->getFunction("sync_produce");
 	vector<Value*> args;
 
-	Value *arg1 = inst;
-	Value *arg2 = ConstantInt::get(Type::getInt32Ty(*context), channel);
+	AllocaInst * alloc = new AllocaInst(Type::getInt8Ty(*context), 0, inst->getNameStr() + "_ptr");
+	StoreInst * store = new StoreInst(inst, alloc);
 
-	args.push_back(arg1);
-	args.push_back(arg2);
+	alloc->insertAfter(inst);
+	store->insertAfter(alloc);
+
+	args.push_back(alloc);
+	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
 
 	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
 
-	call->insertAfter(inst);
+	call->insertAfter(store);
 }
 
 void DSWP::insertConsume(Instruction * inst, int channel) {
@@ -84,11 +87,14 @@ void DSWP::insertConsume(Instruction * inst, int channel) {
 
 	vector<Value*> args;
 
-	Value *arg1 = inst;
-	Value *arg2 = ConstantInt::get(Type::getInt32Ty(*context), channel);
+	AllocaInst * alloc = new AllocaInst(Type::getInt8Ty(*context), 0, inst->getNameStr() + "_ptr");
+	StoreInst * store = new StoreInst(inst, alloc);
 
-	args.push_back(arg1);
-	args.push_back(arg2);
+	alloc->insertBefore(inst);
+	store->insertBefore(alloc);
+
+	args.push_back(alloc);
+	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
 
 	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
 

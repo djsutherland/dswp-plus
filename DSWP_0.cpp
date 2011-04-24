@@ -578,23 +578,17 @@ void DSWP::loopSplit(Loop *L) {
 		}
 	}
 
-
-	//following code probaly not needed
 	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
-//	BasicBlock *funEntry = & (header->getParent()->getEntryBlock());
-//	Instruction *allocPos = funEntry->getTerminator();
-//	Instruction *insPos = header->getTerminator();
+//	Instruction *allocPos = func->getEntryBlock().getTerminator();
 //
-//	map<Value *, AllocaInst *> args;	//each live in variable corresponding to a memory location
 //	vector<StoreInst *> stores;
-//	for (set<Value *>::iterator vi = livein.begin(); vi != livein.end(); vi++) {
+//	for (set<Value *>::iterator vi = defin.begin(); vi != defin.end(); vi++) {	//TODO: is defin enough
 //		Value *val = *vi;
 //		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
-//		StoreInst * storeArg = new StoreInst(val, arg, insPos);
-//
-//		args[val] = args;
-//		stores.push_back(storeArg);
+//		varToMem[val] = arg;
 //	}
+
+	//TODO insert function call here
 
 //		//load back the live out
 //
