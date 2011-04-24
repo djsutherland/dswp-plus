@@ -1,4 +1,4 @@
-need do phi elimination first?
-how to deal with preheader? do we have preheader?
-will the getAnalysis be execute lazily?
+need do phi elimination first? (assume no phi first, but will too many memory dependency limit our chance of parallel)
+will the getAnalysis be execute lazily? (seems yes)
 need to understand how to insert external function call
+if there is a dependency for branch

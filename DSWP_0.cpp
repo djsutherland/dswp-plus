@@ -385,7 +385,7 @@ int DSWP::getLatency(Instruction *I) {
     switch (opcode) {
         // Terminator instructions
         case 1: cost=2; break;          // Return
-        case 2: cost=3; break;          // Branch
+        case 2: cost=3; break;          // Branch   //TODO NOT RIGHT
         case 3: cost=3; break;          // Switch
 
                 // Standard binary operators
@@ -469,8 +469,8 @@ void DSWP::loopSplit(Loop *L) {
 	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it++) {
 		Value *val = * it;
 		const Type *vType = val->getType();			//the type of the val
-		const Type *aType = vType;					//TODO: the type of the ptr to the val
-		argTypes.push_back(aType);
+		//const Type *aType = vType;					//the type of the ptr to the val
+		argTypes.push_back(vType);
 	}
 	FunctionType  *fType = FunctionType::get(Type::getVoidTy(header->getContext()), argTypes, false);
 
@@ -506,7 +506,12 @@ void DSWP::loopSplit(Loop *L) {
 		map<BasicBlock *, BasicBlock *> BBMap;	//map the old block to new block
 		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
-			BBMap[BB] = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i), func);
+			BasicBlock *NBB = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i), func);
+			BBMap[BB] = NBB;
+			if (BB == header) {
+				//TODO ensure it is in the first of the block
+				//NBB->mo
+			}
 		}
 
 		IRBuilder<> Builder(getGlobalContext());
@@ -522,6 +527,7 @@ void DSWP::loopSplit(Loop *L) {
 				Instruction *newInst;
 				if (isa<TerminatorInst>(inst)) {//copy the teminatorInst since they could be used mutiple times
 					newInst = inst->clone();
+					termMap[inst].push_back(newInst);
 				} else {
 					newInst = inst;
 					inst->removeFromParent();
@@ -535,7 +541,7 @@ void DSWP::loopSplit(Loop *L) {
 					if (BasicBlock *oldBB = dyn_cast<BasicBlock>(op)) {
 						BasicBlock * newBB = BBMap[oldBB];
 						while (newBB == NULL) {
-							//TODO find the nearest post-dominator (not sure it is correct)
+							//find the nearest post-dominator (TODO not sure it is correct)
 							oldBB = pre[oldBB];
 							newBB = BBMap[oldBB];
 						}
@@ -547,42 +553,53 @@ void DSWP::loopSplit(Loop *L) {
 				NBB->getInstList().insertAfter(NBB->getInstList().end(), newInst);
 			}
 		}// for add instruction
-
-		//remove the old instruction and blocks in loop, basically only header should remain
-		for (Loop::block_iterator bi = L->block_begin(); bi != L->block_end(); bi++) {
-			BasicBlock * BB = *bi;
-			BB->getTerminator()->removeFromParent();
-
-			if (BB->getInstList().size() > 0) {
-				error("check remove process of loop split");
-			}
-
-			if (BB == header) {
-				BranchInst::Create(exit, header);
-			}
-			else {
-				BB->removeFromParent();
-			}
-		}
-
-		//insert store instruction (store register value to memory), now I insert them into the beginning of the function
-		BasicBlock *funEntry = & (header->getParent()->getEntryBlock());
-		Instruction *allocPos = funEntry->getTerminator();
-		Instruction *storePos = header->getTerminator();
-
-		vector<AllocaInst *> args;
-		vector<StoreInst *> stores;
-		for (set<Value *>::iterator vi = livein.begin(); vi != livein.end(); vi++) {
-			Value *val = *vi;
-			AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
-			StoreInst * storeArg = new StoreInst(val, arg, storePos);
-
-			args.push_back(arg);
-			stores.push_back(storeArg);
-		}
-
-		//TODO insert function call here
 	}
+
+	//remove the old instruction and blocks in loop, basically only header should remain
+	for (Loop::block_iterator bi = L->block_begin(); bi != L->block_end(); bi++) {
+		BasicBlock * BB = *bi;
+		BB->getTerminator()->removeFromParent();
+
+		if (BB->getInstList().size() > 0) {
+			error("check remove process of loop split");
+		}
+
+		if (BB == header) {
+			BranchInst::Create(exit, header);
+		} else {
+			BB->removeFromParent();
+		}
+	}
+
+
+	//following code probaly not needed
+	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
+//	BasicBlock *funEntry = & (header->getParent()->getEntryBlock());
+//	Instruction *allocPos = funEntry->getTerminator();
+//	Instruction *insPos = header->getTerminator();
+//
+//	map<Value *, AllocaInst *> args;	//each live in variable corresponding to a memory location
+//	vector<StoreInst *> stores;
+//	for (set<Value *>::iterator vi = livein.begin(); vi != livein.end(); vi++) {
+//		Value *val = *vi;
+//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
+//		StoreInst * storeArg = new StoreInst(val, arg, insPos);
+//
+//		args[val] = args;
+//		stores.push_back(storeArg);
+//	}
+
+//		//load back the live out
+//
+//		for (set<Value *>::iterator vi = liveout.begin(); vi != liveout.end(); vi++) {
+//			Value *val = *vi;
+//			Value *ptr = args[val];
+//			LoadInst * newVal = new LoadInst(ptr, val->getNameStr() + "_new", insPos);
+//
+//
+//			for (use_iterator ui = val->use_begin(); ui != val->use_end(); ui++) {
+//
+//		}
 }
 
 void DSWP::getLiveinfo(Loop * L) {

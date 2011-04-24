@@ -18,8 +18,18 @@ void DSWP::insertSynchronization(Loop *L) {
 		int t2 = assigned[sccId[e.v]];
 		if (t1 == t2)	//they are in same thread, therefore no need to syn
 			continue;
-		//insert produce after e.u
-		//insert consume before e.v
+
+		if (isa<TerminatorInst>(e.v)) {	//so e.v is a  branch that could be copy into many thread
+			vector<Value*> termList = termMap[e.v];
+			for (vector<Value*>::iterator vi = termList.begin(); vi != termList.end(); vi++) {
+				Value *vv = *vi;
+				//insert produce after e.u
+				//insert consume before vv
+			}
+		} else {
+			//insert produce after e.u
+			//insert consume before e.v
+		}
 	}
 
 //	// remaining functions are auxiliary

@@ -127,6 +127,8 @@ namespace {
 		//part 4: code splitting
 		void loopSplit(Loop *L);
 
+		map<Value*, vector<Value*> > termMap;	//map the new instruction to the old instu
+
 		//the new functions (has already been inserted, waiting for syn)
 		vector<Function *> allFunc;
 
