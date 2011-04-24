@@ -24,13 +24,13 @@ void DSWP::insertSynchronization(Loop *L) {
 			vector<Value*> termList = termMap[e.v];
 			for (vector<Value*>::iterator vi = termList.begin(); vi != termList.end(); vi++) {
 				Value *vv = *vi;
-				insertProduce(e.u, channel);
-				insertConsume(dyn_cast<Instruction>(vv), channel);
+				insertProduce(e.u, e.v, e.dtype, channel);
+				insertConsume(e.u, dyn_cast<Instruction>(vv), e.dtype, channel);
 				channel++;
 			}
 		} else {
-			insertProduce(e.u, channel);
-			insertConsume(e.v, channel);
+			insertProduce(e.u, e.v, e.dtype, channel);
+			insertConsume(e.u, e.v, e.dtype, channel);
 			channel++;
 		}
 	}
@@ -68,18 +68,36 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 	Function *fun = module->getFunction("sync_produce");
 	vector<Value*> args;
 
-	BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
+	Instruction *pos = u;
 
-	cast->insertAfter(u);
+	if (dtype == DTRUE) {
+		BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
+		cast->insertAfter(u);
+		pos = cast;
+		args.push_back(cast);
+	} else {
+		args.push_back(ConstantInt::get(Type::getInt8Ty(*context), 0));	//just a dummy value
+	}
 
-	args.push_back(alloc);
-	args.push_back(ConstantInt::get(Type::getInt8PtrTy(*context), channel));
+	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
 
 	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
 
-	call->insertAfter(store);
+	call->insertAfter(pos);
 }
 
 void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int channel) {
+	Function *fun = module->getFunction("sync_consume");
+	vector<Value*> args;
+	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
+	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
+	if (dtype == DTRUE) {	//READ after WRITE
+		if (!isa<LoadInst>(v)) {
+			error("not true dependency");
+		}
 
+		BitCastInst *cast = new BitCastInst(call, 00000, call->getNameStr() + "_ptr");
+		cast->insertBefore(v);
+	}
+	call->insertBefore(v);
 }
