@@ -61,10 +61,20 @@ namespace {
 	class DSWP: public LoopPass {
 
 	private:
+		//neccesary information
+		Module * module;
+		Function *func;
+		BasicBlock * header;
+		BasicBlock * exit;
+		//IRBuilder<> Builder;
+		LLVMContext *context;
+		//
+
 		//part 0
 		void addEdge(Instruction *u, Instruction *v, DType dtype);
 
 		bool checkEdge(Instruction *u, Instruction *v);
+
 
 		//part 1: program dependence graph
 		void buildPDG(Loop *L);
@@ -142,6 +152,10 @@ namespace {
 		void insertSynDependecy(Loop *L);
 
 		void insertSynchronization(Loop *L);
+
+		void insertProduce(Instruction * inst, int channel);
+
+		void insertConsume(Instruction * inst, int channel);
 
 		//test function
 		void showGraph(Loop *L);

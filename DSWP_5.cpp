@@ -9,8 +9,9 @@ void DSWP::insertSynchronization(Loop *L) {
 	this->insertSynDependecy(L);
 	// main function is allFunc[0]
 	Function *main = this->allFunc[0];
-	// insert initialization code (e.g. send the function
+	//TODO insert initialization code (e.g. send the function
 	// pointers to the waiting threads)
+	int channel = 0;
 
 	for (unsigned int i = 0; i < allEdges.size(); i++) {
 		Edge e = allEdges[i];
@@ -23,12 +24,14 @@ void DSWP::insertSynchronization(Loop *L) {
 			vector<Value*> termList = termMap[e.v];
 			for (vector<Value*>::iterator vi = termList.begin(); vi != termList.end(); vi++) {
 				Value *vv = *vi;
-				//insert produce after e.u
-				//insert consume before vv
+				insertProduce(e.u, channel);
+				insertConsume(dyn_cast<Instruction>(vv), channel);
+				channel++;
 			}
 		} else {
-			//insert produce after e.u
-			//insert consume before e.v
+			insertProduce(e.u, channel);
+			insertConsume(e.v, channel);
+			channel++;
 		}
 	}
 
@@ -59,4 +62,35 @@ void DSWP::insertSynDependecy(Loop *L) {
 			}
 		}
 	}
+}
+
+void DSWP::insertProduce(Instruction * inst, int channel) {
+	Function *fun = module->getFunction("sync_produce");
+	vector<Value*> args;
+
+	Value *arg1 = inst;
+	Value *arg2 = ConstantInt::get(Type::getInt32Ty(*context), channel);
+
+	args.push_back(arg1);
+	args.push_back(arg2);
+
+	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
+
+	call->insertAfter(inst);
+}
+
+void DSWP::insertConsume(Instruction * inst, int channel) {
+	Function *fun = module->getFunction("sync_consume");
+
+	vector<Value*> args;
+
+	Value *arg1 = inst;
+	Value *arg2 = ConstantInt::get(Type::getInt32Ty(*context), channel);
+
+	args.push_back(arg1);
+	args.push_back(arg2);
+
+	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
+
+	call->insertBefore(inst);
 }

@@ -1,4 +1,9 @@
 need do phi elimination first? (assume no phi first, but will too many memory dependency limit our chance of parallel)
 will the getAnalysis be execute lazily? (seems yes)
-need to understand how to insert external function call
+need to understand how to insert external function call (see tutorial) and link?
+Function::Create(FT, Function::ExternalLinkage, Name, TheModule);
+
+
 if there is a dependency for branch
+queue prepare in llvm
+reasonable latency table

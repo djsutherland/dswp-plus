@@ -17,8 +17,15 @@ RegisterPass<DSWP> X("dswp", "15745 Decoupled Software Pipeline");
 DSWP::DSWP() : LoopPass (ID){
 }
 
-bool DSWP::doInitialization(Loop *, LPPassManager &LPM) {
-//	cout << "can you see that?" << endl;
+bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
+	header = L->getHeader();
+	exit = L->getExitBlock();
+	func = header->getParent();
+	module = func->getParent();
+	context = &module->getContext();
+
+	//TODO insert external function declare
+
 	return true;
 }
 
@@ -514,7 +521,7 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}
 
-		IRBuilder<> Builder(getGlobalContext());
+		//IRBuilder<> Builder(getGlobalContext());
 
 		//add instruction
 		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
