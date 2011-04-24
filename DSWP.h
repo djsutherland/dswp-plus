@@ -148,6 +148,9 @@ namespace {
 		//show partition
 		void showPartition(Loop *L);
 
+		//show live in and live out set
+		void showLiveInfo(Loop *L);
+
 		Utils util;
 
 		//give each instruction a name, including terminator instructions (which can not be setName)

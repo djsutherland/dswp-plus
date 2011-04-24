@@ -46,7 +46,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	showDAG(L);
 	threadPartition(L);
 	showPartition(L);
-	//loopSplit(L);
+	loopSplit(L);
 	return true;
 }
 
@@ -165,7 +165,6 @@ void DSWP::buildPDG(Loop *L) {
 			//end memory dependence
 		}//for ii
 	}//for bi
-
 
 	//begin control dependence
 	//initialize pre
@@ -548,9 +547,22 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}// for add instruction
 
-		//TODO remove the old instruction and blocks in loop, basically only header should remain
+		//remove the old instruction and blocks in loop, basically only header should remain
+		for (Loop::block_iterator bi = L->block_begin(); bi != L->block_end(); bi++) {
+			BasicBlock * BB = *bi;
+			BB->getTerminator()->removeFromParent();
 
+			if (BB->getInstList().size() > 0) {
+				error("check remove process of loop split");
+			}
 
+			if (BB == header) {
+				BranchInst::Create(exit, header);
+			}
+			else {
+				BB->removeFromParent();
+			}
+		}
 
 		//insert store instruction (store register value to memory), now I insert them into the beginning of the function
 		BasicBlock *funEntry = & (header->getParent()->getEntryBlock());
