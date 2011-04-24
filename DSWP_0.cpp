@@ -32,37 +32,8 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 	module = func->getParent();
 	context = &module->getContext();
 
-	if (exit == NULL) {
-		error("exit not unique!");
-	}
-
 	//TODO insert external function declare
 
-	Function * produce = module->getFunction("sync_produce");
-	if (produce == NULL) {	//the first time, we need to link them
-		//add sync_produce function
-		vector<const Type *> produce_arg;
-		produce_arg.push_back(Type::getInt8PtrTy(*context));
-		produce_arg.push_back(Type::getInt32Ty(*context));
-		FunctionType *produce_ft = FunctionType::get(Type::getVoidTy(*context), produce_arg, false);
-		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", module);
-
-		//add syn_consume function
-		vector<const Type *> consume_arg;
-		consume_arg.push_back(Type::getInt32Ty(*context));
-		FunctionType *consume_ft = FunctionType::get(Type::getInt8PtrTy(*context), consume_arg, false);
-		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
-
-		//add sync_init
-		FunctionType *init_ft = FunctionType::get(Type::getVoidTy(*context), false);
-		Function *init = Function::Create(init_ft, Function::ExternalLinkage, "sync_init", module);
-
-		//add jump
-		vector<const Type *> jump_arg;
-		jump_arg.push_back(Type::getInt8PtrTy(*context));
-		FunctionType *jump_ft = FunctionType::get(Type::getInt8PtrTy(*context), jump_arg, false);
-		Function *jump = Function::Create(jump_ft, Function::ExternalLinkage, "jump_to_func", module);
-	}
 	return true;
 }
 
@@ -90,7 +61,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	showDAG(L);
 	threadPartition(L);
 	showPartition(L);
-	loopSplit(L);
+	//loopSplit(L);
 	//insertSynchronization(L);
 	return true;
 }

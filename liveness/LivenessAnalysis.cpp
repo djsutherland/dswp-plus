@@ -134,4 +134,4 @@ bool LivenessAnalysis::isVaribleLiveOut(Value * var, Value* position) {
 }
 
 char LivenessAnalysis::ID = 0;
-RegisterPass<LivenessAnalysis> Y("liveness-dswp", "15745: liveness Analysis");
+RegisterPass<LivenessAnalysis> X("liveness-dswp", "15745: liveness Analysis");
