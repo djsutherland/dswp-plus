@@ -160,6 +160,7 @@ void DSWP::buildPDG(Loop *L) {
 						addEdge(dep, inst, DOUT);	//WRITE AFTER WRITE
 					}
 				}
+				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
 			//end memory dependence
 		}//for ii
@@ -442,6 +443,8 @@ int DSWP::getLatency(Instruction *I) {
 }
 
 /////////////////////////////////////////////code spliting/////////////////////////////////////////////////////
+//TODO add parameters for functions !!!
+
 void DSWP::loopSplit(Loop *L) {
 //	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 //		BasicBlock *BB = *bi;
@@ -578,7 +581,6 @@ void DSWP::showGraph(Loop *L) {
 	cout << "exit:" << L->getExitBlock()->getNameStr() << endl;	//TODO check different functions related to exit
 	cout << "num of blocks:" << L->getBlocks().size() << endl;
 
-
 	std::string name = "showgraph";
 	ofstream file((name.c_str()));
 	raw_os_ostream ost(file);
@@ -642,7 +644,7 @@ void DSWP::showPartition(Loop *L) {
 		vector<int> &nodes = part[i];
 
 		ost << "\t";
-		for(int j = 0; j < nodes.size(); j++) {
+		for(unsigned j = 0; j < nodes.size(); j++) {
 			ost << nodes[j] << " ";
 		}
 		ost << "\n";

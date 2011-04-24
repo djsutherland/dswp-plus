@@ -33,7 +33,12 @@ using namespace std;
 namespace {
 	static const int MAX_THREAD = 4;
 
-	enum DType {REG, DTRUE, DANTI, DOUT, CONTROL, CONTROL_LC};
+	//REG: register dependency
+	//DTRUE: data dependency - read after write
+	//DANTI: data dependency - write after read
+	//DOUT: data dependency - write after write
+	//DSYN: data dependency - read after read
+	enum DType {REG, DTRUE, DANTI, DOUT, DSYN, CONTROL, CONTROL_LC};
 
 	struct Edge {
 		Instruction *u, *v;
@@ -130,7 +135,9 @@ namespace {
 		set<Value *> liveout;
 
 		// part 5: synchronization insertion
-		void insertSynchronization();
+		void insertSynDependecy(Loop *L);
+
+		void insertSynchronization(Loop *L);
 
 		//test function
 		void showGraph(Loop *L);
