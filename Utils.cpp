@@ -11,7 +11,7 @@ string itoa(int i) {
     return out.str();
 }
 
-void error(char *info) {
+void error(const char *info) {
 	printf("%s\n", info);
 }
 

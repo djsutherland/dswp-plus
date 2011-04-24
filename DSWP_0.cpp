@@ -452,12 +452,15 @@ void DSWP::loopSplit(Loop *L) {
 //			Instruction *inst = &(*ii);
 //		}
 //	}
+
 	BasicBlock *header = L->getHeader();
 	BasicBlock *exit = L->getExitBlock();
 
 	if (exit == NULL) {
 		error("exit not unique! have to think about this");
 	}
+
+	getLiveinfo(L);
 
 	allFunc.clear();
 
@@ -540,10 +543,7 @@ void DSWP::loopSplit(Loop *L) {
 }
 
 void DSWP::getLiveinfo(Loop * L) {
-	//LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
-
 	//currently I don't want to use standard liveness analysis
-
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
@@ -572,6 +572,17 @@ void DSWP::getLiveinfo(Loop * L) {
 	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout
 	liveout = livein;
 	liveout.insert(defin.begin(), defin.end());
+
+	//now we can delete those in liveout but is not really live outside the loop
+	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
+	BasicBlock *exit = L->getExitBlock();
+
+	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); ) {
+		it2 = it; it2 ++;
+		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
+			liveout.erase(it);
+		}
+	}
 }
 
 /////////////////////////////////////////////test function/////////////////////////////////////////////////////
