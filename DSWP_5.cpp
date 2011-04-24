@@ -70,8 +70,18 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 
 	Instruction *pos = u;
 
-	if (dtype == DTRUE) {
+	if (dtype == REG) {
 		BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
+		cast->insertAfter(u);
+		pos = cast;
+		args.push_back(cast);
+	}
+	else if (dtype == DTRUE) {
+		StoreInst *store = dyn_cast<StoreInst>(u);
+		if (store == NULL) {
+			error("not true dependency!");
+		}
+		BitCastInst *cast = new BitCastInst(store->getOperand(0), Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
 		cast->insertAfter(u);
 		pos = cast;
 		args.push_back(cast);
