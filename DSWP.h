@@ -88,7 +88,9 @@ namespace {
 		map<Instruction *, vector<Edge> * > rev;
 		//dag
 		map<int, vector<int> * > dag;
-		//
+		//edge table, all the dependency relationship
+		vector<Edge> allEdges;
+
 		vector< vector<Instruction *> > InstInSCC;
 
 		//the father node for each block in post dominator tree

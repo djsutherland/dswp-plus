@@ -53,6 +53,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 
 void DSWP::addEdge(Instruction *u, Instruction *v, DType dtype) {
 	pdg[u]->push_back(Edge(u, v, dtype));
+	allEdges.push_back(Edge(u, v, dtype));
 	rev[v]->push_back(Edge(v, u, dtype));
 }
 
