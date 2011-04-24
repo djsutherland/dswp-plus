@@ -68,14 +68,15 @@ void DSWP::insertProduce(Instruction * inst, int channel) {
 	Function *fun = module->getFunction("sync_produce");
 	vector<Value*> args;
 
-	AllocaInst * alloc = new AllocaInst(Type::getInt8Ty(*context), 0, inst->getNameStr() + "_ptr");
+	//TODO : check the type
+	AllocaInst * alloc = new AllocaInst(Type::getInt8PtrTy(*context), 0, inst->getNameStr() + "_ptr");
 	StoreInst * store = new StoreInst(inst, alloc);
 
 	alloc->insertAfter(inst);
 	store->insertAfter(alloc);
 
 	args.push_back(alloc);
-	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
+	args.push_back(ConstantInt::get(Type::getInt8PtrTy(*context), channel));
 
 	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
 
