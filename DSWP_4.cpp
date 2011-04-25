@@ -14,18 +14,20 @@ void DSWP::loopSplit(Loop *L) {
 //		}
 //	}
 	getLiveinfo(L);
+	return;
+
 
 	allFunc.clear();
 
 	//prepare the arguments and function Type
 	vector<const Type*> argTypes;
+	argTypes.push_back(Type::)
 	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it++) {
 		Value *val = * it;
 		const Type *vType = val->getType();			//the type of the val
-		//const Type *aType = vType;					//the type of the ptr to the val
-		argTypes.push_back(vType);
+		argTypes.push_back(Type::getInt8PtrTy(*context));
 	}
-	FunctionType  *fType = FunctionType::get(Type::getVoidTy(header->getContext()), argTypes, false);
+	FunctionType  *fType = FunctionType::get(Type::getVoidTy(*context), argTypes, false);
 
 	//check for each partition, find relevant blocks, set could auto deduplicate
 	for (int i = 0; i < MAX_THREAD; i++) {
@@ -150,6 +152,8 @@ void DSWP::loopSplit(Loop *L) {
 }
 
 void DSWP::getLiveinfo(Loop * L) {
+
+	return;
 	//currently I don't want to use standard liveness analysis
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;

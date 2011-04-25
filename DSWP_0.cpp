@@ -36,8 +36,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		error("exit not unique!");
 	}
 
-	//TODO insert external function declare
-
+	//insert external function declare
 	Function * produce = module->getFunction("sync_produce");
 	if (produce == NULL) {	//the first time, we need to link them
 		//add sync_produce function
@@ -57,7 +56,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		FunctionType *init_ft = FunctionType::get(Type::getVoidTy(*context), false);
 		Function *init = Function::Create(init_ft, Function::ExternalLinkage, "sync_init", module);
 
-		//add jump
+		//add sync_joint
 		vector<const Type *> jump_arg;
 		jump_arg.push_back(Type::getInt8PtrTy(*context));
 		FunctionType *jump_ft = FunctionType::get(Type::getInt8PtrTy(*context), jump_arg, false);
