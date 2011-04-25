@@ -35,7 +35,7 @@ void DSWP::threadPartition(Loop *L) {
 	//-1: not assigned, but in queue
 	//0 ~ MAX_THREAD, already been assigned, not in queue
 
-	int estLatency[MAX_THREAD];
+	int estLatency[MAX_THREAD] = {};
 
 	//TODO NOT SURE HERE IS RIGHT! header vs. preheader
 	int start = sccId[L->getHeader()->getFirstNonPHI()];
@@ -58,14 +58,14 @@ void DSWP::threadPartition(Loop *L) {
 			}
 			//check load balance
 			if (estLatency[i] >= averLatency) {
-				//cout << estLatency[i] << endl;
+			//	cout << estLatency[i] << endl;
 				break;
 			}
 		}
 	}
 	//following is impossible since every time I let it bigger that aver
 	if (!Q.empty()) {
-		printf("err");
+		error("queue should be empty!");
 	}
 
 	for (int i = 0; i < MAX_THREAD; i++)

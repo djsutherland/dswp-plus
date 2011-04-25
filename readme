@@ -8,3 +8,5 @@ carefully deduplicate the dependency
 if there is a dependency for branch
 queue prepare in llvm
 reasonable latency table
+
+TODO context

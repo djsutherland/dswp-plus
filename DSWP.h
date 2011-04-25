@@ -115,6 +115,8 @@ private:
 	//store the dfs sequence
 	vector<Instruction *> list;
 
+	BasicBlock * replaceBlock;
+
 	//part 3: thread partition
 	void threadPartition(Loop *L);
 

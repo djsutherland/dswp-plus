@@ -60,12 +60,11 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		Function *join = Function::Create(join_ft, Function::ExternalLinkage, "sync_join", module);
 
 		//add sync_delegate
-		PointerType * arg3 = PointerType::get(Type::getInt8PtrTy(*context), 0);
-
 		vector<const Type *>  argFunArg;
-		argFunArg.push_back(arg3);
-		FunctionType * argFun = FunctionType::get(Type::getVoidTy(*context), argFunArg, false);
+		argFunArg.push_back(Type::getInt8PtrTy(*context));
+		FunctionType * argFun = FunctionType::get(Type::getInt8PtrTy(*context), argFunArg, false);
 		PointerType * arg2 = PointerType::get(argFun, 0);
+		PointerType * arg3 = PointerType::get(Type::getInt8PtrTy(*context), 0);
 
 		vector<const Type *> delegate_arg;
 		delegate_arg.push_back(Type::getInt32Ty(*context));
@@ -91,6 +90,7 @@ void DSWP::initilize(Loop *L) {
 bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	if (L->getLoopDepth() != 1)	//ONLY care about top level loops
     	return false;
+
 
 	cout << "we are running on a loop" << endl;
 

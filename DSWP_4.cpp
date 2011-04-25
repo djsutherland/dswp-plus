@@ -6,32 +6,46 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::preLoopSplit(Loop *L) {
-
 	allFunc.clear();
 
-	BasicBlock * newBlock = BasicBlock::Create(*context, "loop-replace", func);
-	BranchInst *brInst = BranchInst::Create(exit, newBlock);
+	replaceBlock = BasicBlock::Create(*context, "loop-replace", func);
+	BranchInst *brInst = BranchInst::Create(exit, replaceBlock);
+	replaceBlock->moveBefore(exit);
+
+	if (L->contains(exit)) {
+		error("don't know why");
+	}
+
+	//BranchInst *brInst = BranchInst::Create(exit);
+	//newBlock->getInstList().push_back(brInst);
 	//every block to header (except the ones in the loop), will now redirect to here
 	for (pred_iterator PI = pred_begin(header); PI != pred_end(header); ++PI) {
 		BasicBlock *pred = *PI;
-		if (L->contains(pred))
+		if (L->contains(pred)) {
 			continue;
+		}
 		TerminatorInst *termInst = pred->getTerminator();
 
 		for (unsigned i = 0; i < termInst->getNumOperands(); i++) {
 			BasicBlock *bb = dyn_cast<BasicBlock> (termInst->getOperand(i));
 			if (bb == header) {
-				termInst->setOperand(i, newBlock);
+				termInst->setOperand(i, replaceBlock);
 			}
+		}
+	}
+
+	for (Loop::block_iterator li = L->block_begin(); li != L->block_end(); li++) {
+		BasicBlock *BB = *li;
+		if (BB == replaceBlock) {
+			error("the blokc should not appear here!");
 		}
 	}
 
 	//prepare the function Type
 	vector<const Type*> funArgTy;
-	PointerType* argPointTy_2 = PointerType::get(Type::getInt8Ty(*context), 0);
-	PointerType* argPointTy = PointerType::get(argPointTy_2, 0);
+	PointerType* argPointTy = PointerType::get(Type::getInt8Ty(*context), 0);
 	funArgTy.push_back(argPointTy);
-	FunctionType *fType = FunctionType::get(Type::getVoidTy(*context),
+	FunctionType *fType = FunctionType::get(Type::getInt8PtrTy(*context),
 			funArgTy, false);
 	//add functions
 	for (int i = 0; i < MAX_THREAD; i++) {
@@ -97,6 +111,8 @@ void DSWP::preLoopSplit(Loop *L) {
 	CallInst *callJoin = CallInst::Create(join);
 	callJoin->insertBefore(brInst);
 
+	//replaceBlock->dump();	//check if the new block is correct
+
 //	//read back from memory
 //
 //	for (unsigned i = 0; i < livein.size(); i++) {
@@ -122,13 +138,22 @@ void DSWP::loopSplit(Loop *L) {
 
 
 	//check for each partition, find relevant blocks, set could auto deduplicate
+
 	for (int i = 0; i < MAX_THREAD; i++) {
+		cout << "create function for thread " + itoa(i) << endl;
+
 		//create function body to each thread
-		Function *func = allFunc[i];
+		Function *curFunc = allFunc[i];
 
 		//each partition contain several scc
 		map<Instruction *, bool> relinst;
 		set<BasicBlock *> relbb;
+
+		cout << part[i].size() << endl;
+
+		/*
+		 * analysis the dependent blocks
+		 */
 		for (vector<int>::iterator ii = part[i].begin(); ii != part[i].end(); ii++) {
 			int scc = *ii;
 			for (vector<Instruction *>::iterator iii = InstInSCC[scc].begin(); iii != InstInSCC[scc].end(); iii++) {
@@ -145,17 +170,88 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}
 
-		//copy blocks
-		map<BasicBlock *, BasicBlock *> BBMap;	//map the old block to new block
+		//check consistence of the blocks
 		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
-			BasicBlock *NBB = BasicBlock::Create(BB->getContext(), BB->getNameStr() + "_" + itoa(i), func);
-			BBMap[BB] = NBB;
-			if (BB == header) {
-				//TODO ensure it is in the first of the block
-				//NBB->mo
-			}
+			cout << BB->getNameStr() << "\t";
 		}
+		cout << endl;
+
+
+		map<BasicBlock *, BasicBlock *> BBMap;	//map the old block to new block
+
+		if (relbb.size() == 0) {
+			error("has size 0");
+		}
+
+		/*
+		 * Create the new blocks to the new function, including an entry and exit
+		 */
+		BasicBlock * newEntry = BasicBlock::Create(*context, "new-entry", curFunc);
+		BasicBlock * newExit = BasicBlock::Create(*context, "new-exit", curFunc);
+
+		//copy the basicblock and modify the control flow
+		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
+			BasicBlock *BB = *bi;
+			BasicBlock *NBB = BasicBlock::Create(*context, BB->getNameStr() + "_" + itoa(i), curFunc);
+			BBMap[BB] = NBB;
+		}
+
+		/*
+		 * insert the control flow instructions
+		 */
+		BranchInst * newToHeader = BranchInst::Create(BBMap[header], newEntry);	//pointer to the header so loop can be executed
+		ReturnInst * newRet = ReturnInst::Create(*context, Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit);	//return null
+
+		for (set<BasicBlock *>::iterator bi = relbb.begin();  bi != relbb.end(); bi++) {
+			BasicBlock *BB = *bi;
+			BasicBlock *NBB = BBMap[BB];
+			if (!NBB->empty())
+				error("insane error! DSWP4");
+
+			const TerminatorInst *oldTerm = BB->getTerminator();
+			TerminatorInst * newTerm = dyn_cast<TerminatorInst>(oldTerm->clone());
+			NBB->getInstList().push_back(newTerm);
+
+			//replace the target block
+			for (unsigned i = 0; i < newTerm->getNumOperands(); i++) {
+				Value *op = newTerm->getOperand(i);
+			}
+
+
+		}
+
+		/*
+		 * Insert load instruction to load argument make mapping
+		 */
+		Function::ArgumentListType &arglist = curFunc->getArgumentList();
+		if (arglist.size() != 1 ) {
+			error("argument size error!");
+		}
+		Argument *args = arglist.begin();	//the function only have one argmument
+
+		BitCastInst *castArgs = new BitCastInst(args, PointerType::get(Type::getInt8Ty(*context), 0));
+		castArgs->insertBefore(newToHeader);
+
+		for (unsigned i = 0; i < livein.size(); i++) {
+			ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
+							(uint64_t) i);
+			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(castArgs, idx,
+							""); //get the element ptr
+			ele_addr->insertBefore(newToHeader);
+			LoadInst * ele_val = new LoadInst(ele_addr);
+			ele_val->insertBefore(newToHeader);
+			Value *val = livein[i];
+			//TODO, replace the use of val in this particular function
+		}
+
+
+		/*
+		 * finally insert the new inst and correct whether the block name and instruction name
+		 */
+
+
+		continue;
 
 		//IRBuilder<> Builder(getGlobalContext());
 
@@ -197,6 +293,9 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}// for add instruction
 	}
+
+	//cout << "test_now" << endl;
+	return;
 
 	//remove the old instruction and blocks in loop, basically only header should remain
 	for (Loop::block_iterator bi = L->block_begin(); bi != L->block_end(); bi++) {
@@ -251,6 +350,14 @@ void DSWP::getLiveinfo(Loop * L) {
 			Instruction *inst = &(*ui);
 			if (util.hasNewDef(inst)) {
 				defin.push_back(inst);
+			}
+			for (Instruction::use_iterator oi = inst->use_begin(); oi != inst->use_end(); oi++) {
+				User *use = *oi;
+				if (Instruction *ins = dyn_cast<Instruction>(use)) {
+					if (!L->contains(ins)) {
+						error("loop defin exist outside the loop");
+					}
+				}
 			}
 		}
 	}

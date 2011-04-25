@@ -13,7 +13,7 @@ void *sync_consume(value_id_t vid) {
 
 // called by master thread
 // sends function pointers to the auxiliary threads
-void sync_delegate(int tid, void (*fp)(void *[]), void *args[]) {
+void sync_delegate(int tid, void (*fp)(void *), void *args[]) {
   pthread_create(&threads[tid], NULL, fp, (void *)args);
 }
 
