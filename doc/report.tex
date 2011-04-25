@@ -1,0 +1,53 @@
+\documentclass[11pt]{article}
+
+\title{Decoupled Software Pipelining in LLVM \\
+        {\large 15-745 Final Project}}
+\author{Fuyao Zhao and Mark Hahnenberg}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\subsection{Problem}
+Decoupled software pipelining presents an easy way to automatically extract thread-level parallelism for general loops in any program.  The compiler does this by examining the dependences of the loops in a given program, splitting the instructions of that loop into multiple smaller loops that execute in independent threads, and inserting dependence communication between these threads so that they remain synchronized.  The full process is described below in detail.  
+
+\subsection{Approach}
+We chose to implement DSWP using the general POSIX threading library (pthreads) and the Low Level Virtual Machine (LLVM) compiler infrastructure.  
+
+\subsection{Related Work}
+While DSWP has been implemented before, it was in the context of the IMPACT research compiler using customized hardware-level support on the Itanium platform.
+
+\subsection{Contribution}
+The decision to use LLVM will allow our implementation to be viewed in a context that is more relevant and more widely used than the IMPACT compiler, as LLVM is becoming not only a research but industry standard.  Due to our choice to use pthreads, Our DSWP implementation will also be portable across more platforms than previous implementations since any system that supports both LLVM and POSIX will be able to use our implementation, while former systems were limited to the Itanium platform with customized hardware support.
+
+\section{Design}
+\subsection{The Steps of DSWP}
+DSWP can be described as a series of steps that first accumulate information about the program, then use that information to the extract the TLP from the program's loops, and finally modifies the program to execute in parallel those portions deemed to be parallelizable.
+
+\subsubsection{Build Program Depedence Graph (PDG)}
+
+\subsubsection{Find Strongly Connected Components (SCC)}
+
+\subsubsection{Coalesce the SCCs into a DAG}
+
+\subsubsection{Assign Partitions of DAG to Threads}
+
+\subsubsection{Split Partitions into Loops}
+
+\subsubsection{Insert Depedence Synchronization}
+
+\section{Experimental Setup}
+We built a loadable module for LLVM that can be called as a separate optimization pass.  We then ran this pass on the otherwise unoptimized SPEC2000 benchmarks.  We compared these results with the results of running the completely unoptimized SPEC2000 benchmarks.
+
+\section{Experimental Results}
+
+
+\section{Lessons Learned}
+
+
+\section{Conclusions}
+
+
+\end{document}
