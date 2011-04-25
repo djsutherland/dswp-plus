@@ -138,10 +138,6 @@ private:
 
 	map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu
 
-	//TODO IMPORTANT! the mapping relation between live-in variables and the mem location
-	//while here we write to memory and read it back to reg (and replace value), the created function will read to register and then write back to memory
-	map<Value *, Value *> instToMem;
-
 	//the new functions (has already been inserted, waiting for syn)
 	vector<Function *> allFunc;
 

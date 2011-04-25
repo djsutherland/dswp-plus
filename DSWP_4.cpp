@@ -6,7 +6,6 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::preLoopSplit(Loop *L) {
-	getLiveinfo(L);
 
 	allFunc.clear();
 
@@ -52,6 +51,9 @@ void DSWP::preLoopSplit(Loop *L) {
 			livein.size());
 	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
 	trueArg->insertBefore(brInst);
+	//trueArg->setAlignment(8);
+
+//	trueArg->dump();
 
 	for (unsigned i = 0; i < livein.size(); i++) {
 		Value *val = livein[i];
@@ -59,10 +61,14 @@ void DSWP::preLoopSplit(Loop *L) {
 				*context), val->getName() + "_ptr");
 		castVal->insertBefore(brInst);
 
-		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-				(uint64_t) i);
-		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,
-				""); //get the element ptr
+		//get the element ptr
+		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),	(uint64_t) i);
+		//GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,"");		//use this cannot get the right type!
+		vector<Value *> arg; 		arg.push_back(idx);		arg.push_back(idx);
+		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, arg.begin(), arg.end(), "");
+		ele_addr->insertBefore(brInst);
+
+		//ele_addr->getType()->dump();
 
 		StoreInst * storeVal = new StoreInst(castVal, ele_addr);
 		storeVal->insertBefore(brInst);
@@ -76,7 +82,12 @@ void DSWP::preLoopSplit(Loop *L) {
 		args.push_back(ConstantInt::get(Type::getInt32Ty(*context),
 				(uint64_t) i)); //tid
 		args.push_back(func); //the function pointer
-		args.push_back(trueArg); //true arg that will be call by func
+
+		PointerType * finalType = PointerType::get(Type::getInt8PtrTy(*context), 0);
+		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
+		finalArg->insertBefore(brInst);
+
+		args.push_back(finalArg); //true arg that will be call by func
 		CallInst * callfunc = CallInst::Create(delegate, args.begin(), args.end());
 		callfunc->insertBefore(brInst);
 	}
@@ -86,7 +97,19 @@ void DSWP::preLoopSplit(Loop *L) {
 	CallInst *callJoin = CallInst::Create(join);
 	callJoin->insertBefore(brInst);
 
-	//TODO
+//	//read back from memory
+//
+//	for (unsigned i = 0; i < livein.size(); i++) {
+//		Value *val = livein[i];
+//
+//		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
+//				(uint64_t) i);
+//		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,
+//				""); //get the element ptr
+//
+//		Load * storeVal = new StoreInst(castVal, ele_addr);
+//		storeVal->insertBefore(brInst);
+//	}
 }
 
 void DSWP::loopSplit(Loop *L) {
@@ -217,30 +240,39 @@ void DSWP::loopSplit(Loop *L) {
 }
 
 void DSWP::getLiveinfo(Loop * L) {
-//	//currently I don't want to use standard liveness analysis
-//	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-//		BasicBlock *BB = *bi;
-//		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
-//			Instruction *inst = &(*ui);
-//			if (util.hasNewDef(inst)) {
-//				defin.insert(inst);
-//			}
-//		}
-//	}
-//
-//	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-//		BasicBlock *BB = *bi;
-//		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
-//			Instruction *inst = &(*ui);
-//
-//			for (Instruction::op_iterator oi = inst->op_begin(); oi != inst->op_end(); oi++) {
-//				Value *op = *oi;
-//				if (defin.find(op) == defin.end()) {
-//					livein.insert(op);
-//				}
-//			}
-//		}
-//	}
+	defin.clear();
+	livein.clear();
+	liveout.clear();
+
+	//currently I don't want to use standard liveness analysis
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *inst = &(*ui);
+			if (util.hasNewDef(inst)) {
+				defin.push_back(inst);
+			}
+		}
+	}
+
+	//make all the use in the loop, but not defin in it, as live in variable
+	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+			Instruction *inst = &(*ui);
+
+			for (Instruction::op_iterator oi = inst->op_begin(); oi != inst->op_end(); oi++) {
+				Value *op = *oi;
+				if (isa<Instruction>(op) || isa<Argument>(op)) {
+					if (find(defin.begin(), defin.end(), op) == defin.end() ) {	//
+						livein.push_back(op);
+					}
+				}
+			}
+		}
+	}
+
+	//NOW I DIDN'T SEE WHY WE NEED LIVE OUT
 //	//so basically I add variables used in loop but not been declared in loop as live variable
 //
 //	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout

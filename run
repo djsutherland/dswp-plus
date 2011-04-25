@@ -12,8 +12,8 @@ opt -load ~/Programs/llvm/Release/lib/DSWP.so -dswp simple.o -o out.o
 
 llvm-dis out.o
 
-cat showgraph
-cat dag
-cat partition
+#cat showgraph
+#cat dag
+#cat partition
 
 cd ..

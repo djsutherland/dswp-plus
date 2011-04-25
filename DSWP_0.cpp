@@ -55,15 +55,24 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		FunctionType *consume_ft = FunctionType::get(Type::getInt8PtrTy(*context), consume_arg, false);
 		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
 
-		//add sync_init
-		FunctionType *init_ft = FunctionType::get(Type::getVoidTy(*context), false);
-		Function *init = Function::Create(init_ft, Function::ExternalLinkage, "sync_init", module);
+		//add sync_join
+		FunctionType *join_ft = FunctionType::get(Type::getVoidTy(*context), false);
+		Function *join = Function::Create(join_ft, Function::ExternalLinkage, "sync_join", module);
 
-		//add jump
-		vector<const Type *> jump_arg;
-		jump_arg.push_back(Type::getInt8PtrTy(*context));
-		FunctionType *jump_ft = FunctionType::get(Type::getInt8PtrTy(*context), jump_arg, false);
-		Function *jump = Function::Create(jump_ft, Function::ExternalLinkage, "jump_to_func", module);
+		//add sync_delegate
+		PointerType * arg3 = PointerType::get(Type::getInt8PtrTy(*context), 0);
+
+		vector<const Type *>  argFunArg;
+		argFunArg.push_back(arg3);
+		FunctionType * argFun = FunctionType::get(Type::getVoidTy(*context), argFunArg, false);
+		PointerType * arg2 = PointerType::get(argFun, 0);
+
+		vector<const Type *> delegate_arg;
+		delegate_arg.push_back(Type::getInt32Ty(*context));
+		delegate_arg.push_back(arg2);
+		delegate_arg.push_back(arg3);
+		FunctionType *delegate_ft = FunctionType::get(Type::getVoidTy(*context), delegate_arg, false);
+		Function *delegate = Function::Create(delegate_ft, Function::ExternalLinkage, "sync_delegate", module);
 	}
 	return true;
 }
@@ -92,7 +101,10 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	showDAG(L);
 	threadPartition(L);
 	showPartition(L);
-	loopSplit(L);
+	getLiveinfo(L);
+	showLiveInfo(L);
+	preLoopSplit(L);
+	//loopSplit(L);
 	//insertSynchronization(L);
 	return true;
 }
@@ -192,4 +204,6 @@ void DSWP::showPartition(Loop *L) {
 	}
 }
 
-
+void DSWP::showLiveInfo(Loop *L) {
+	//TODO
+}
