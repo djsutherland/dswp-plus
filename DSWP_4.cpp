@@ -4,7 +4,90 @@
 
 using namespace llvm;
 using namespace std;
-//TODO add parameters for functions !!!
+
+void DSWP::preLoopSplit(Loop *L) {
+	getLiveinfo(L);
+
+	allFunc.clear();
+
+	BasicBlock * newBlock = BasicBlock::Create(*context, "loop-replace", func);
+	BranchInst *brInst = BranchInst::Create(exit, newBlock);
+	//every block to header (except the ones in the loop), will now redirect to here
+	for (pred_iterator PI = pred_begin(header); PI != pred_end(header); ++PI) {
+		BasicBlock *pred = *PI;
+		if (L->contains(pred))
+			continue;
+		TerminatorInst *termInst = pred->getTerminator();
+
+		for (unsigned i = 0; i < termInst->getNumOperands(); i++) {
+			BasicBlock *bb = dyn_cast<BasicBlock> (termInst->getOperand(i));
+			if (bb == header) {
+				termInst->setOperand(i, newBlock);
+			}
+		}
+	}
+
+	//prepare the function Type
+	vector<const Type*> funArgTy;
+	PointerType* argPointTy_2 = PointerType::get(Type::getInt8Ty(*context), 0);
+	PointerType* argPointTy = PointerType::get(argPointTy_2, 0);
+	funArgTy.push_back(argPointTy);
+	FunctionType *fType = FunctionType::get(Type::getVoidTy(*context),
+			funArgTy, false);
+	//add functions
+	for (int i = 0; i < MAX_THREAD; i++) {
+		//create functions to  each thread
+		Constant * c = module->getOrInsertFunction(itoa(loopCounter)
+				+ "_subloop_" + itoa(i), fType); //they both have same function type
+		if (c == NULL) {
+			error("no function!");
+		}
+		Function *func = cast<Function> (c);
+		func->setCallingConv(CallingConv::C);
+		allFunc.push_back(func);
+	}
+
+	//prepare the actual parameters type
+	ArrayType *arrayType = ArrayType::get(Type::getInt8PtrTy(*context),
+			livein.size());
+	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
+	trueArg->insertBefore(brInst);
+
+	for (unsigned i = 0; i < livein.size(); i++) {
+		Value *val = livein[i];
+		BitCastInst * castVal = new BitCastInst(val, Type::getInt8PtrTy(
+				*context), val->getName() + "_ptr");
+		castVal->insertBefore(brInst);
+
+		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
+				(uint64_t) i);
+		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,
+				""); //get the element ptr
+
+		StoreInst * storeVal = new StoreInst(castVal, ele_addr);
+		storeVal->insertBefore(brInst);
+	}
+
+	//call functions
+	Function *delegate = module->getFunction("sync_delegate");
+	for (int i = 0; i < MAX_THREAD; i++) {
+		Function *func = allFunc[i];
+		vector<Value*> args;
+		args.push_back(ConstantInt::get(Type::getInt32Ty(*context),
+				(uint64_t) i)); //tid
+		args.push_back(func); //the function pointer
+		args.push_back(trueArg); //true arg that will be call by func
+		CallInst * callfunc = CallInst::Create(delegate, args.begin(), args.end());
+		callfunc->insertBefore(brInst);
+	}
+
+	//join them back
+	Function *join = module->getFunction("sync_join");
+	CallInst *callJoin = CallInst::Create(join);
+	callJoin->insertBefore(brInst);
+
+	//TODO
+}
 
 void DSWP::loopSplit(Loop *L) {
 //	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
@@ -13,28 +96,12 @@ void DSWP::loopSplit(Loop *L) {
 //			Instruction *inst = &(*ii);
 //		}
 //	}
-	getLiveinfo(L);
 
-	allFunc.clear();
-
-	//prepare the arguments and function Type
-	vector<const Type*> argTypes;
-	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it++) {
-		Value *val = * it;
-		const Type *vType = val->getType();			//the type of the val
-		//const Type *aType = vType;					//the type of the ptr to the val
-		argTypes.push_back(vType);
-	}
-	FunctionType  *fType = FunctionType::get(Type::getVoidTy(header->getContext()), argTypes, false);
 
 	//check for each partition, find relevant blocks, set could auto deduplicate
 	for (int i = 0; i < MAX_THREAD; i++) {
-		//create function to each each thread
-		Constant * c = header->getParent()->getParent()->getOrInsertFunction("subloop_" + itoa(i), fType);	//they both have same function type
-		Function *func = cast<Function>(c);
-		func->setCallingConv(CallingConv::C);
-
-		allFunc.push_back(func);
+		//create function body to each thread
+		Function *func = allFunc[i];
 
 		//each partition contain several scc
 		map<Instruction *, bool> relinst;
@@ -150,44 +217,44 @@ void DSWP::loopSplit(Loop *L) {
 }
 
 void DSWP::getLiveinfo(Loop * L) {
-	//currently I don't want to use standard liveness analysis
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
-			Instruction *inst = &(*ui);
-			if (util.hasNewDef(inst)) {
-				defin.insert(inst);
-			}
-		}
-	}
-
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
-			Instruction *inst = &(*ui);
-
-			for (Instruction::op_iterator oi = inst->op_begin(); oi != inst->op_end(); oi++) {
-				Value *op = *oi;
-				if (defin.find(op) == defin.end()) {
-					livein.insert(op);
-				}
-			}
-		}
-	}
-	//so basically I add variables used in loop but not been declared in loop as live variable
-
-	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout
-	liveout = livein;
-	liveout.insert(defin.begin(), defin.end());
-
-	//now we can delete those in liveout but is not really live outside the loop
-	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
-	BasicBlock *exit = L->getExitBlock();
-
-	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it = it2) {
-		it2 = it; it2 ++;
-		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
-			liveout.erase(it);
-		}
-	}
+//	//currently I don't want to use standard liveness analysis
+//	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+//		BasicBlock *BB = *bi;
+//		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+//			Instruction *inst = &(*ui);
+//			if (util.hasNewDef(inst)) {
+//				defin.insert(inst);
+//			}
+//		}
+//	}
+//
+//	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+//		BasicBlock *BB = *bi;
+//		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+//			Instruction *inst = &(*ui);
+//
+//			for (Instruction::op_iterator oi = inst->op_begin(); oi != inst->op_end(); oi++) {
+//				Value *op = *oi;
+//				if (defin.find(op) == defin.end()) {
+//					livein.insert(op);
+//				}
+//			}
+//		}
+//	}
+//	//so basically I add variables used in loop but not been declared in loop as live variable
+//
+//	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout
+//	liveout = livein;
+//	liveout.insert(defin.begin(), defin.end());
+//
+//	//now we can delete those in liveout but is not really live outside the loop
+//	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
+//	BasicBlock *exit = L->getExitBlock();
+//
+//	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it = it2) {
+//		it2 = it; it2 ++;
+//		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
+//			liveout.erase(it);
+//		}
+//	}
 }

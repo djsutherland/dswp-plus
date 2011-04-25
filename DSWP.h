@@ -64,6 +64,7 @@ private:
 	BasicBlock * exit;
 	//IRBuilder<> Builder;
 	LLVMContext *context;
+	int loopCounter;
 	//
 
 	//part 0
@@ -131,18 +132,24 @@ private:
 	vector<int> sccLatency;
 
 	//part 4: code splitting
+	void preLoopSplit(Loop *L);
+
 	void loopSplit(Loop *L);
 
 	map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu
+
+	//TODO IMPORTANT! the mapping relation between live-in variables and the mem location
+	//while here we write to memory and read it back to reg (and replace value), the created function will read to register and then write back to memory
+	map<Value *, Value *> instToMem;
 
 	//the new functions (has already been inserted, waiting for syn)
 	vector<Function *> allFunc;
 
 	//get live variable infomration
 	void getLiveinfo(Loop * L);
-	set<Value *> livein; //live in variable
-	set<Value *> defin; //Variable generate in the loop
-	set<Value *> liveout;
+	vector<Value *> livein; //live in variable
+	vector<Value *> defin; //Variable generate in the loop
+	vector<Value *> liveout;
 
 	// part 5: synchronization insertion
 	void insertSynDependecy(Loop *L);

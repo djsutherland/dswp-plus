@@ -23,6 +23,7 @@ char DSWP::ID = 0;
 RegisterPass<DSWP> X("dswp", "15745 Decoupled Software Pipeline");
 
 DSWP::DSWP() : LoopPass (ID){
+	loopCounter = 0;
 }
 
 bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
@@ -31,6 +32,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 	func = header->getParent();
 	module = func->getParent();
 	context = &module->getContext();
+	loopCounter++;
 
 	if (exit == NULL) {
 		error("exit not unique!");
