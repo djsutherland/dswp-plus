@@ -360,7 +360,7 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}
 
-		curFunc->dump();
+		//curFunc->dump();
 	}
 
 	/*
@@ -399,6 +399,9 @@ void DSWP::deleteLoop(Loop *L) {
 	for (int i = 0; i < MAX_THREAD; i++) {
 		allFunc[i]->dump();
 	}
+	cout << "other stuff" << endl;
+
+	//cout << Type::getInt8PtrTy(*context, 0)->
 }
 
 void DSWP::getLiveinfo(Loop * L) {
@@ -440,8 +443,9 @@ void DSWP::getLiveinfo(Loop * L) {
 					!= inst->op_end(); oi++) {
 				Value *op = *oi;
 				if (isa<Instruction> (op) || isa<Argument> (op)) {
-					if (find(defin.begin(), defin.end(), op) == defin.end()) { //
-						livein.push_back(op);
+					if (find(defin.begin(), defin.end(), op) == defin.end()) { //variable not defin in loop
+						if (find(livein.begin(), livein.end(), op) == livein.end())	//deduplicate
+							livein.push_back(op);
 					}
 				}
 			}

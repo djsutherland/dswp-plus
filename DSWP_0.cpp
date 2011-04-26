@@ -209,5 +209,12 @@ void DSWP::showPartition(Loop *L) {
 }
 
 void DSWP::showLiveInfo(Loop *L) {
-	//TODO
+	cout << "live variable information" << endl;
+	for (int i = 0; i < livein.size(); i++) {
+		Value * val = livein[i];
+		cout << val->getNameStr() << "\t";
+		//val->getType()->dump();
+		//cout << endl;
+	}
+	cout << endl;
 }

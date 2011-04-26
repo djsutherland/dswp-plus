@@ -100,13 +100,32 @@ void DSWP::insertSynDependecy(Loop *L) {
 void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int channel, int uthread, int vthread) {
 	Function *fun = module->getFunction("sync_produce");
 	vector<Value*> args;
-	Instruction *insPos = v->getNextNode();
+	Instruction *insPos = u->getNextNode();
+
 	if (insPos == NULL) {
 		error("here cannot be null");
 	}
 
+	if (isa<BranchInst>(u)) {
+		error("I don't know how do deal with it");
+		return;
+	}
+
 	if (dtype == REG) {	//register dep
-		BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");	//cast value
+		CastInst *cast;
+
+		if (u->getType()->isIntegerTy()) {
+			cast = new IntToPtrInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
+		}
+		else if (u->getType()->isFloatingPointTy()) {
+			error("cannot deal with double");
+		}
+		else if (u->getType()->isPointerTy()){
+			cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");	//cast value
+		} else {
+			error("what's the hell type");
+		}
+
 		cast->insertBefore(insPos);
 		args.push_back(cast);													//push the value
 	}
@@ -124,7 +143,7 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 
 	args.push_back(ConstantInt::get(Type::getInt32Ty(*context), channel));
 	CallInst *call = CallInst::Create(fun, args.begin(), args.end());		//call it
-	call->setName("p" + channel);
+//	call->setName("p" + channel);
 	call->insertBefore(insPos);												//insert call
 }
 
@@ -141,7 +160,20 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 	call->insertBefore(v);
 
 	if (dtype == REG) {
-		BitCastInst *cast = new BitCastInst(call, u->getType(), call->getNameStr() + "_cons");
+		CastInst *cast;
+
+		if (u->getType()->isIntegerTy()) {
+			cast = new PtrToIntInst(call, u->getType(), call->getNameStr() + "_val");
+		}
+		else if (u->getType()->isFloatingPointTy()) {
+			error("cannot deal with double");
+		}
+		else if (u->getType()->isPointerTy()){
+			cast = new BitCastInst(call, u->getType(), call->getNameStr() + "_val");	//cast value
+		} else {
+			error("what's the hell type");
+		}
+
 		cast->insertBefore(v);
 //		for (unsigned i = 0; i < v->getNumOperands(); i++) {
 //			Value *op = v->getOperand(i);
