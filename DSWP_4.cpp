@@ -235,7 +235,7 @@ void DSWP::loopSplit(Loop *L) {
 			for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
 				Instruction * inst = ii;
 
-				if (!relinst[inst] && !isa<TerminatorInst> (inst))	//TODO I NEED TO CHECK THIS BACK
+				if (!relinst[inst] && !isa<TerminatorInst> (inst)) //TODO I NEED TO CHECK THIS BACK
 					continue;
 
 				Instruction *newInst = inst->clone();
@@ -254,6 +254,8 @@ void DSWP::loopSplit(Loop *L) {
 							}
 							//replace the target block
 							newInst->setOperand(j, newBB);
+
+							//TODO check if there are two branch, one branch is not in the partition, then what the branch
 						}
 					}
 					termMap[inst].push_back(newInst);
@@ -300,73 +302,14 @@ void DSWP::loopSplit(Loop *L) {
 				}
 			}
 		}
-
-		/*
-		 * finally insert the new inst and correct whether the block name and instruction name
-		 */
-
-		continue;
-
-		//IRBuilder<> Builder(getGlobalContext());
-
-		//add instruction
-		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
-			BasicBlock *BB = *bi;
-			BasicBlock *NBB = BBMap[BB];
-			//BB->splitBasicBlock()
-
-			for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
-				Instruction * inst = ii;
-				Instruction *newInst;
-				if (isa<TerminatorInst> (inst)) {//copy the teminatorInst since they could be used mutiple times
-					newInst = inst->clone();
-					termMap[inst].push_back(newInst);
-				} else {
-					newInst = inst;
-					inst->removeFromParent();
-				}
-
-				//TODO check if there are two branch, one branch is not in the partition, then what the branch
-
-				//instruction will be
-				for (unsigned j = 0; j < newInst->getNumOperands(); j++) {
-					Value *op = newInst->getOperand(j);
-					if (BasicBlock *oldBB = dyn_cast<BasicBlock>(op)) {
-						BasicBlock * newBB = BBMap[oldBB];
-						while (newBB == NULL) {
-							//find the nearest post-dominator (TODO not sure it is correct)
-							oldBB = pre[oldBB];
-							newBB = BBMap[oldBB];
-						}
-
-						newInst->setOperand(j, newBB);
-					}
-				}
-				//TODO not sure this is right way to do this
-				NBB->getInstList().insertAfter(NBB->getInstList().end(),
-						newInst);
-			}
-		}// for add instruction
 	}
+
+	/*
+	 * Insert Syn to gurantee
+	 */
 
 	//cout << "test_now" << endl;
 	return;
-
-	//remove the old instruction and blocks in loop, basically only header should remain
-	for (Loop::block_iterator bi = L->block_begin(); bi != L->block_end(); bi++) {
-		BasicBlock * BB = *bi;
-		BB->getTerminator()->removeFromParent();
-
-		if (BB->getInstList().size() > 0) {
-			error("check remove process of loop split");
-		}
-
-		if (BB == header) {
-			BranchInst::Create(exit, header);
-		} else {
-			BB->removeFromParent();
-		}
-	}
 
 	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
 	//	Instruction *allocPos = func->getEntryBlock().getTerminator();
@@ -377,20 +320,22 @@ void DSWP::loopSplit(Loop *L) {
 	//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
 	//		varToMem[val] = arg;
 	//	}
+}
 
-	//TODO insert function call here
-
-	//		//load back the live out
-	//
-	//		for (set<Value *>::iterator vi = liveout.begin(); vi != liveout.end(); vi++) {
-	//			Value *val = *vi;
-	//			Value *ptr = args[val];
-	//			LoadInst * newVal = new LoadInst(ptr, val->getNameStr() + "_new", insPos);
-	//
-	//
-	//			for (use_iterator ui = val->use_begin(); ui != val->use_end(); ui++) {
-	//
-	//		}
+void DSWP::deleteLoop(Loop *L) {
+	for (Loop::block_iterator bi = L->block_begin(), bi2; bi != L->block_end(); bi = bi2) {
+		bi2 = bi;
+		bi2++;
+		BasicBlock * BB = *bi;
+		for (BasicBlock::iterator ii = BB->begin(), ii2; ii != BB->end(); ii
+				= ii2) {
+			ii2 = ii;
+			ii2++;
+			Instruction *inst = ii;
+			inst->removeFromParent();
+		}
+		BB->removeFromParent();
+	}
 }
 
 void DSWP::getLiveinfo(Loop * L) {

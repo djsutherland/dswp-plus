@@ -138,6 +138,8 @@ private:
 
 	void loopSplit(Loop *L);
 
+	void deleteLoop(Loop *L);
+
 	map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu (terminators)
 	map<Value*, Value*> instMap; //map the new instruction to the old instuction
 

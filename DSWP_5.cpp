@@ -6,11 +6,8 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::insertSynchronization(Loop *L) {
-	this->insertSynDependecy(L);
-	// main function is allFunc[0]
-	Function *main = this->allFunc[0];
-	//TODO insert initialization code (e.g. send the function
-	// pointers to the waiting threads)
+	//this->insertSynDependecy(L);
+
 	int channel = 0;
 
 	for (unsigned int i = 0; i < allEdges.size(); i++) {
@@ -35,6 +32,7 @@ void DSWP::insertSynchronization(Loop *L) {
 		}
 	}
 
+	cout << channel << endl;
 //	// remaining functions are auxiliary
 //	for (unsigned i = 1; i < this->allFunc.size(); i++) {
 //		Function *curr = this->allFunc[i];
@@ -67,47 +65,55 @@ void DSWP::insertSynDependecy(Loop *L) {
 void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int channel) {
 	Function *fun = module->getFunction("sync_produce");
 	vector<Value*> args;
-
-	Instruction *pos = u;
-
-	if (dtype == REG) {
-		BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
-		cast->insertAfter(u);
-		pos = cast;
-		args.push_back(cast);
+	Instruction *insPos = v->getNextNode();
+	if (insPos == NULL) {
+		error("here cannot be null");
 	}
-	else if (dtype == DTRUE) {
+
+	if (dtype == REG) {	//register dep
+		BitCastInst *cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");	//cast value
+		cast->insertBefore(insPos);
+		args.push_back(cast);													//push the value
+	}
+	else if (dtype == DTRUE) { //true dep
 		StoreInst *store = dyn_cast<StoreInst>(u);
 		if (store == NULL) {
 			error("not true dependency!");
 		}
 		BitCastInst *cast = new BitCastInst(store->getOperand(0), Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
-		cast->insertAfter(u);
-		pos = cast;
-		args.push_back(cast);
-	} else {
-		args.push_back(ConstantInt::get(Type::getInt8Ty(*context), 0));	//just a dummy value
+		cast->insertBefore(insPos);
+		args.push_back(cast);													//push the value											//insert call
+	} else {	//others
+		args.push_back(ConstantInt::get(Type::getInt8Ty(*context), 0));			//just a dummy value
 	}
 
 	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
-
-	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
-
-	call->insertAfter(pos);
+	CallInst *call = CallInst::Create(fun, args.begin(), args.end());		//call it
+	call->insertBefore(insPos);												//insert call
 }
 
 void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int channel) {
 	Function *fun = module->getFunction("sync_consume");
 	vector<Value*> args;
+
 	args.push_back(ConstantInt::get(Type::getInt8Ty(*context), channel));
 	CallInst *call = CallInst::Create(fun, args.begin(), args.end());
-	if (dtype == DTRUE) {	//READ after WRITE
+	call->insertBefore(v);
+
+	if (dtype == REG) {
+		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getNameStr() + "_ptr");
+		for (unsigned i = 0; i < v->getNumOperands(); i++) {
+			Value *use = v->getOperand(i);
+			if (use == u) {
+				v->setOperand(i, cast);
+			}
+		}
+		//TODO perhaps also need to replace other elements after this User
+	} else if (dtype == DTRUE) {	//READ after WRITE
 		if (!isa<LoadInst>(v)) {
 			error("not true dependency");
 		}
-
-		BitCastInst *cast = new BitCastInst(call, 00000, call->getNameStr() + "_ptr");
+		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getNameStr() + "_ptr");
 		cast->insertBefore(v);
 	}
-	call->insertBefore(v);
 }
