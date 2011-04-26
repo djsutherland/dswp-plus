@@ -170,6 +170,8 @@ void DSWP::loopSplit(Loop *L) {
 
 //		cout << part[i].size() << endl;
 
+		relbb.insert(header);
+
 		/*
 		 * analysis the dependent blocks
 		 */

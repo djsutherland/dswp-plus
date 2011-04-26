@@ -64,8 +64,13 @@ void DSWP::threadPartition(Loop *L) {
 		}
 	}
 	//following is impossible since every time I let it bigger that aver
-	if (!Q.empty()) {
-		error("queue should be empty!");
+//	if (!Q.empty()) {
+//		error("queue should be empty!");
+//	}
+
+	while (!Q.empty()) {
+		assigned[Q.top().u] = MAX_THREAD - 1;
+		Q.pop();
 	}
 
 	for (int i = 0; i < MAX_THREAD; i++)

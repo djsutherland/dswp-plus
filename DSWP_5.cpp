@@ -7,7 +7,7 @@ using namespace std;
 
 void DSWP::insertSynchronization(Loop *L) {
 	//this->insertSynDependecy(L);
-
+	cout << "inserting sychronization" << endl;
 	int channel = 0;
 
 	for (unsigned int i = 0; i < allEdges.size(); i++) {
@@ -23,8 +23,8 @@ void DSWP::insertSynchronization(Loop *L) {
 				Value *vv = instMap[j][e.v];
 				if (vv == NULL)
 					continue;
-				insertProduce(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(oldToNew[e.v]), e.dtype, channel);
-				insertConsume(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(vv), e.dtype, channel);
+				//insertProduce(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(oldToNew[e.v]), e.dtype, channel);
+				//insertConsume(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(vv), e.dtype, channel);
 				channel++;
 			}
 		} else {
