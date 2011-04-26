@@ -144,6 +144,8 @@ void DSWP::preLoopSplit(Loop *L) {
 	//		Load * storeVal = new StoreInst(castVal, ele_addr);
 	//		storeVal->insertBefore(brInst);
 	//	}
+
+
 }
 
 void DSWP::loopSplit(Loop *L) {
@@ -180,14 +182,14 @@ void DSWP::loopSplit(Loop *L) {
 			for (vector<Instruction *>::iterator iii = InstInSCC[scc].begin(); iii
 					!= InstInSCC[scc].end(); iii++) {
 				Instruction *inst = *iii;
-				relinst[inst] = true;
+				//relinst[inst] = true;
 				relbb.insert(inst->getParent());
 
 				//add blocks which the instruction dependent on
 				for (vector<Edge>::iterator ei = rev[inst]->begin(); ei
 						!= rev[inst]->end(); ei++) {
 					Instruction *dep = ei->v;
-					relinst[dep] = true;
+					//relinst[dep] = true;
 					relbb.insert(dep->getParent());
 					//cout << dep->getParent()->getNameStr() << endl;
 				}
@@ -257,10 +259,14 @@ void DSWP::loopSplit(Loop *L) {
 			for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
 				Instruction * inst = ii;
 
-				if (!relinst[inst] && !isa<TerminatorInst> (inst)) //TODO I NEED TO CHECK THIS BACK
+				if (assigned[sccId[inst]] != i && !isa<TerminatorInst> (inst)) //TODO I NEED TO CHECK THIS BACK
 					continue;
 
 				Instruction *newInst = inst->clone();
+
+				if (inst->hasName()) {
+					newInst->setName(inst->getName() + "_" + itoa(i));
+				}
 
 				if (isa<TerminatorInst> (newInst)) {
 					for (unsigned j = 0; j < newInst->getNumOperands(); j++) {
@@ -292,17 +298,16 @@ void DSWP::loopSplit(Loop *L) {
 							//TODO check if there are two branch, one branch is not in the partition, then what the branch
 						}
 					}
-					oldToNew[inst] = newInst;
-					newToOld[newInst] = inst;
+					oldToNew[inst] = newInst;	//should not use
 				}
 				instMap[i][inst] = newInst;
+				newInstAssigned[newInst] = i;
+				newToOld[newInst] = inst;
 
 				//newInst->dump();
 				NBB->getInstList().push_back(newInst);
 			}// for inst
 		}// for BB
-
-
 
 		/*
 		 * Insert load instruction to load argument, (replace the live in variables)
@@ -344,14 +349,18 @@ void DSWP::loopSplit(Loop *L) {
 					continue;
 
 				if (Value * newArg = instMap[i][op]) {
+					//cout << "Asdfa" << endl;
 					inst->setOperand(j, newArg);
-				} else if (oldToNew[op]){
-					//inst->dump();
-					inst->setOperand(j, oldToNew[op]);	//set a new variable but is in other thread, however, now we don't have ref to original loop
-					error("dswp4, here should be careful, not neccessary a error");
 				}
+//				else if (oldToNew[op]){
+//					//inst->dump();
+//					inst->setOperand(j, oldToNew[op]);	//set a new variable but is in other thread, however, now we don't have ref to original loop
+//					error("dswp4, here should be careful, not neccessary a error");
+//				}
 			}
 		}
+
+		curFunc->dump();
 	}
 
 	/*
@@ -385,6 +394,10 @@ void DSWP::deleteLoop(Loop *L) {
 			inst->eraseFromParent();
 		}
 		BB->eraseFromParent();
+	}
+
+	for (int i = 0; i < MAX_THREAD; i++) {
+		allFunc[i]->dump();
 	}
 }
 

@@ -146,6 +146,7 @@ private:
 	map<Value*, Value*> instMap[MAX_THREAD]; //map the new instruction to the old instuction
 	map<Value *, Value *> oldToNew;				//direct map without take thread number as arugment
 	map<Value *, Value *> newToOld;
+	map<Value *, int> newInstAssigned;		//the assignment for each newly generated instruction
 
 	int getNewInstAssigned(Value *inst);
 
@@ -164,10 +165,10 @@ private:
 	void insertSynchronization(Loop *L);
 
 	void insertProduce(Instruction * u, Instruction *v, DType dtype,
-			int channel);
+			int channel, int uthread, int vthread);
 
 	void insertConsume(Instruction * u, Instruction *v, DType dtype,
-			int channel);
+			int channel, int uthread, int vthread);
 
 	//test function
 	void showGraph(Loop *L);
