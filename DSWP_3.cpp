@@ -143,3 +143,14 @@ int DSWP::getLatency(Instruction *I) {
 
     return (cost);
 }
+
+int DSWP::getInstAssigned(Value *inst) {
+	return assigned[sccId[dyn_cast<Instruction>(inst)]];
+}
+
+int DSWP::getNewInstAssigned(Value *inst) {
+	if (isa<TerminatorInst>(inst)) {
+		error("cannot be term");
+	}
+	return getInstAssigned(newToOld[inst]);
+}

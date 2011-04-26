@@ -258,10 +258,10 @@ void DSWP::loopSplit(Loop *L) {
 							//TODO check if there are two branch, one branch is not in the partition, then what the branch
 						}
 					}
-					termMap[inst].push_back(newInst);
-				} else {
-					instMap[inst] = newInst;
+					oldToNew[inst] = newInst;
+					newToOld[newInst] = inst;
 				}
+				instMap[i][inst] = newInst;
 			}
 		}
 
@@ -278,16 +278,16 @@ void DSWP::loopSplit(Loop *L) {
 				Type::getInt8Ty(*context), 0));
 		castArgs->insertBefore(newToHeader);
 
-		for (unsigned i = 0; i < livein.size(); i++) {
+		for (unsigned j = 0; j < livein.size(); j++) {
 			ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-					(uint64_t) i);
+					(uint64_t) j);
 			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(castArgs,
 					idx, ""); //get the element ptr
 			ele_addr->insertBefore(newToHeader);
 			LoadInst * ele_val = new LoadInst(ele_addr);
 			ele_val->insertBefore(newToHeader);
-			Value *val = livein[i];
-			instMap[val] = ele_val;
+			Value *val = livein[j];
+			instMap[i][val] = ele_val;
 		}
 
 		/*
@@ -297,8 +297,10 @@ void DSWP::loopSplit(Loop *L) {
 			Instruction *inst = &(*ii);
 			for (unsigned j = 0; j < inst->getNumOperands(); j++) {
 				Value *op = inst->getOperand(j);
-				if (Value * newArg = instMap[op]) {
+				if (Value * newArg = instMap[i][op]) {
 					inst->setOperand(j, newArg);
+				} else {
+					inst->setOperand(j, oldToNew[op]);	//set a new variable but is in other thread, however, now we don't have ref to original loop
 				}
 			}
 		}

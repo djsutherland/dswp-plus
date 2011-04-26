@@ -18,16 +18,18 @@ void DSWP::insertSynchronization(Loop *L) {
 			continue;
 
 		if (isa<TerminatorInst>(e.v)) {	//so e.v is a  branch that could be copy into many thread
-			vector<Value*> termList = termMap[e.v];
-			for (vector<Value*>::iterator vi = termList.begin(); vi != termList.end(); vi++) {
-				Value *vv = *vi;
-				insertProduce(e.u, e.v, e.dtype, channel);
-				insertConsume(e.u, dyn_cast<Instruction>(vv), e.dtype, channel);
+			//vector<Value*> termList = termMap[e.v];
+			for (unsigned j = 0; j < MAX_THREAD; j++) {
+				Value *vv = instMap[j][e.v];
+				if (vv == NULL)
+					continue;
+				insertProduce(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(oldToNew[e.v]), e.dtype, channel);
+				insertConsume(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(vv), e.dtype, channel);
 				channel++;
 			}
 		} else {
-			insertProduce(e.u, e.v, e.dtype, channel);
-			insertConsume(e.u, e.v, e.dtype, channel);
+			insertProduce(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(oldToNew[e.v]), e.dtype, channel);
+			insertConsume(dyn_cast<Instruction>(oldToNew[e.u]), dyn_cast<Instruction>(oldToNew[e.v]), e.dtype, channel);
 			channel++;
 		}
 	}
@@ -93,6 +95,9 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 }
 
 void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int channel) {
+	int uthread = this->getNewInstAssigned(u);
+	int vthread = this->getNewInstAssigned(v);
+
 	Function *fun = module->getFunction("sync_consume");
 	vector<Value*> args;
 
@@ -102,18 +107,60 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 
 	if (dtype == REG) {
 		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getNameStr() + "_ptr");
+		cast->insertBefore(v);
+
 		for (unsigned i = 0; i < v->getNumOperands(); i++) {
-			Value *use = v->getOperand(i);
-			if (use == u) {
+			Value *op = v->getOperand(i);
+			int opthread = this->getNewInstAssigned(op);
+			if (op == u) {
 				v->setOperand(i, cast);
 			}
 		}
 		//TODO perhaps also need to replace other elements after this User
+		for (Instruction::use_iterator ui = u->use_begin(); ui != u->use_end(); ui++) {	// this is diff from next block for DTRUE
+			User *user = *ui;
+
+			int userthread = this->getNewInstAssigned(user);
+			if (userthread != vthread) {
+				continue;
+			}
+
+			cout << "see" << endl;
+
+			for (unsigned i = 0; i < user->getNumOperands(); i++) {
+				Value * op = user->getOperand(i);
+				if (op == u) {
+					user->setOperand(i, cast);
+				}
+			}
+		}
 	} else if (dtype == DTRUE) {	//READ after WRITE
 		if (!isa<LoadInst>(v)) {
 			error("not true dependency");
 		}
 		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getNameStr() + "_ptr");
 		cast->insertBefore(v);
+
+		//replace the v with 'cast' in v's thread: (other thread with be dealed using dependence)
+		for (Instruction::use_iterator ui = v->use_begin(); ui != v->use_end(); ui++) {
+			User *user = *ui;
+
+			int userthread = this->getNewInstAssigned(user);
+			if (userthread != vthread) {
+				cout << "prove what I think is true";
+				continue;
+			}
+
+			for (unsigned i = 0; i < user->getNumOperands(); i++) {
+				Value * op = user->getOperand(i);
+				if (op == v) {
+					user->setOperand(i, cast);
+				}
+			}
+		}
+	} else {
+
 	}
 }
+
+

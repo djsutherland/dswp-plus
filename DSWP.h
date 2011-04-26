@@ -126,6 +126,8 @@ private:
 	//assigned[i] = node i in dag has been assgined to assigned[i] thread
 	vector<int> assigned;
 
+	int getInstAssigned(Value *inst);
+
 	//part[i] = i thread contains part[i] nodes of the dag
 	vector<int> part[MAX_THREAD];
 	set<BasicBlock *> BBS[MAX_THREAD];
@@ -140,8 +142,12 @@ private:
 
 	void deleteLoop(Loop *L);
 
-	map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu (terminators)
-	map<Value*, Value*> instMap; //map the new instruction to the old instuction
+	//map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu (terminators)
+	map<Value*, Value*> instMap[MAX_THREAD]; //map the new instruction to the old instuction
+	map<Value *, Value *> oldToNew;				//direct map without take thread number as arugment
+	map<Value *, Value *> newToOld;
+
+	int getNewInstAssigned(Value *inst);
 
 	//the new functions (has already been inserted, waiting for syn)
 	vector<Function *> allFunc;
