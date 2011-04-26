@@ -9,4 +9,4 @@ if there is a dependency for branch
 queue prepare in llvm
 reasonable latency table
 
-TODO context
+TODO block cannot be split ! ADD RESTRICT SOMEWHERE

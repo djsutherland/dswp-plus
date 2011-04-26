@@ -104,8 +104,10 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	getLiveinfo(L);
 	showLiveInfo(L);
 	preLoopSplit(L);
-	//loopSplit(L);
+	loopSplit(L);
 	//insertSynchronization(L);
+	//deleteLoop(L);
+
 	return true;
 }
 

@@ -146,6 +146,7 @@ void DSWP::preLoopSplit(Loop *L) {
 }
 
 void DSWP::loopSplit(Loop *L) {
+	cout << "Loop split" << endl;
 	//	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 	//		BasicBlock *BB = *bi;
 	//		for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
@@ -185,14 +186,22 @@ void DSWP::loopSplit(Loop *L) {
 					Instruction *dep = ei->v;
 					relinst[dep] = true;
 					relbb.insert(dep->getParent());
+					cout << dep->getParent()->getNameStr() << endl;
 				}
 			}
 		}
 
+		cout << "depend block: " << relbb.size() << " " << "depend inst: " << relinst.size() << endl;
+		cout << "header: " << header->getNameStr() << endl;
 		//check consistence of the blocks
 		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
 			cout << BB->getNameStr() << "\t";
+		}
+		cout << endl;
+		//check consitence of the instructions
+		for (map<Instruction *, bool>::iterator mi = relinst.begin(); mi != relinst.end(); mi++) {
+			cout << dname[mi->first] << "\t";
 		}
 		cout << endl;
 
@@ -201,6 +210,7 @@ void DSWP::loopSplit(Loop *L) {
 		if (relbb.size() == 0) {
 			error("has size 0");
 		}
+
 
 		/*
 		 * Create the new blocks to the new function, including an entry and exit
@@ -214,16 +224,24 @@ void DSWP::loopSplit(Loop *L) {
 		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
 			BasicBlock *NBB = BasicBlock::Create(*context, BB->getNameStr()
-					+ "_" + itoa(i), curFunc);
+					+ "_" + itoa(i), curFunc, newExit);
 			BBMap[BB] = NBB;
 		}
+
 
 		/*
 		 * insert the control flow and normal instructions
 		 */
+		if (BBMap[header] == NULL) {
+			error("this must be a error early in dependency analysis stage");
+		}
 		BranchInst * newToHeader = BranchInst::Create(BBMap[header], newEntry); //pointer to the header so loop can be executed
+
+
 		ReturnInst * newRet = ReturnInst::Create(*context,
 				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit); //return null
+
+		continue;
 
 		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
@@ -231,7 +249,6 @@ void DSWP::loopSplit(Loop *L) {
 			if (!NBB->empty())
 				error("insane error! DSWP4");
 
-			//insert normal instruction
 			for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
 				Instruction * inst = ii;
 
@@ -247,8 +264,10 @@ void DSWP::loopSplit(Loop *L) {
 
 						if (BasicBlock * oldBB = dyn_cast<BasicBlock>(op)) {
 							BasicBlock * newBB = BBMap[oldBB];
+							if (!L->contains(oldBB))	//so it is a block outside the loop
+								continue;
 							while (newBB == NULL) {
-								//find the nearest post-dominator (TODO not sure it is correct)
+								//find the nearest post-dominator (TODO not sure it is correct)+6
 								oldBB = pre[oldBB];
 								newBB = BBMap[oldBB];
 							}
