@@ -34,7 +34,7 @@ void DSWP::insertSynchronization(Loop *L) {
 		}
 	}
 
-	cout << channel << endl;
+	//cout << channel << endl;
 //	// remaining functions are auxiliary
 //	for (unsigned i = 1; i < this->allFunc.size(); i++) {
 //		Function *curr = this->allFunc[i];

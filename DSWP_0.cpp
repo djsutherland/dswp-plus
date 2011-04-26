@@ -91,8 +91,10 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	if (L->getLoopDepth() != 1)	//ONLY care about top level loops
     	return false;
 
+	if (generated.find(L->getHeader()->getParent()) != generated.end())	//this is the generated code
+		return false;
 
-	cout << "we are running on a loop" << endl;
+	cout << "///////////////////////////// we are running on a loop" << endl;
 
 	buildPDG(L);
 	showGraph(L);
@@ -105,9 +107,9 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	showLiveInfo(L);
 	preLoopSplit(L);
 	loopSplit(L);
-	//insertSynchronization(L);
-	//deleteLoop(L);
-
+	insertSynchronization(L);
+	deleteLoop(L);
+	cout << "//////////////////////////// we finsih run on a loop " << endl;
 	return true;
 }
 

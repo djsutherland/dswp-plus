@@ -30,7 +30,7 @@
 using namespace llvm;
 using namespace std;
 
-static const int MAX_THREAD = 2;
+static const int MAX_THREAD = 1;
 
 //REG: register dependency
 //DTRUE: data dependency - read after write
@@ -62,9 +62,9 @@ private:
 	Function *func;
 	BasicBlock * header;
 	BasicBlock * exit;
-	//IRBuilder<> Builder;
 	LLVMContext *context;
 	int loopCounter;
+	set<Function *> generated;	//all generated function that should not be run in the pass
 	//
 
 	//part 0

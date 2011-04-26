@@ -64,6 +64,7 @@ void DSWP::preLoopSplit(Loop *L) {
 		Function *func = cast<Function> (c);
 		func->setCallingConv(CallingConv::C);
 		allFunc.push_back(func);
+		generated.insert(func);
 	}
 
 	/*
@@ -167,7 +168,7 @@ void DSWP::loopSplit(Loop *L) {
 		map<Instruction *, bool> relinst;
 		set<BasicBlock *> relbb;
 
-		cout << part[i].size() << endl;
+//		cout << part[i].size() << endl;
 
 		/*
 		 * analysis the dependent blocks
@@ -186,24 +187,24 @@ void DSWP::loopSplit(Loop *L) {
 					Instruction *dep = ei->v;
 					relinst[dep] = true;
 					relbb.insert(dep->getParent());
-					cout << dep->getParent()->getNameStr() << endl;
+					//cout << dep->getParent()->getNameStr() << endl;
 				}
 			}
 		}
 
-		cout << "depend block: " << relbb.size() << " " << "depend inst: " << relinst.size() << endl;
-		cout << "header: " << header->getNameStr() << endl;
-		//check consistence of the blocks
-		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
-			BasicBlock *BB = *bi;
-			cout << BB->getNameStr() << "\t";
-		}
-		cout << endl;
-		//check consitence of the instructions
-		for (map<Instruction *, bool>::iterator mi = relinst.begin(); mi != relinst.end(); mi++) {
-			cout << dname[mi->first] << "\t";
-		}
-		cout << endl;
+//		cout << "depend block: " << relbb.size() << " " << "depend inst: " << relinst.size() << endl;
+//		cout << "header: " << header->getNameStr() << endl;
+//		//check consistence of the blocks
+//		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
+//			BasicBlock *BB = *bi;
+//			cout << BB->getNameStr() << "\t";
+//		}
+//		cout << endl;
+//		//check consitence of the instructions
+//		for (map<Instruction *, bool>::iterator mi = relinst.begin(); mi != relinst.end(); mi++) {
+//			cout << dname[mi->first] << "\t";
+//		}
+//		cout << endl;
 
 		map<BasicBlock *, BasicBlock *> BBMap; //map the old block to new block
 
@@ -225,9 +226,13 @@ void DSWP::loopSplit(Loop *L) {
 			BasicBlock *BB = *bi;
 			BasicBlock *NBB = BasicBlock::Create(*context, BB->getNameStr()
 					+ "_" + itoa(i), curFunc, newExit);
+			//BranchInst *term = BranchInst::Create(NBB, NBB);
+
 			BBMap[BB] = NBB;
 		}
 
+		//curFunc->dump();
+		//continue;
 
 		/*
 		 * insert the control flow and normal instructions
@@ -237,17 +242,15 @@ void DSWP::loopSplit(Loop *L) {
 		}
 		BranchInst * newToHeader = BranchInst::Create(BBMap[header], newEntry); //pointer to the header so loop can be executed
 
-
 		ReturnInst * newRet = ReturnInst::Create(*context,
 				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit); //return null
 
-		continue;
+		//continue;
+	//	curFunc->dump();
 
 		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
 			BasicBlock *NBB = BBMap[BB];
-			if (!NBB->empty())
-				error("insane error! DSWP4");
 
 			for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
 				Instruction * inst = ii;
@@ -256,7 +259,6 @@ void DSWP::loopSplit(Loop *L) {
 					continue;
 
 				Instruction *newInst = inst->clone();
-				NBB->getInstList().push_back(newInst);
 
 				if (isa<TerminatorInst> (newInst)) {
 					for (unsigned j = 0; j < newInst->getNumOperands(); j++) {
@@ -264,8 +266,16 @@ void DSWP::loopSplit(Loop *L) {
 
 						if (BasicBlock * oldBB = dyn_cast<BasicBlock>(op)) {
 							BasicBlock * newBB = BBMap[oldBB];
-							if (!L->contains(oldBB))	//so it is a block outside the loop
+
+							if (oldBB == L->getExitBlock()) {
+								newBB = newExit;
+							} else if (!L->contains(oldBB)) {	//so it is a block outside the loop
+								//cout << oldBB->getNameStr() << endl;
 								continue;
+							}
+
+							//cout << newBB->getNameStr() << endl;
+
 							while (newBB == NULL) {
 								//find the nearest post-dominator (TODO not sure it is correct)+6
 								oldBB = pre[oldBB];
@@ -274,6 +284,9 @@ void DSWP::loopSplit(Loop *L) {
 							//replace the target block
 							newInst->setOperand(j, newBB);
 
+							//newInst->dump();
+							//cout << newBB->getNameStr() << endl;
+
 							//TODO check if there are two branch, one branch is not in the partition, then what the branch
 						}
 					}
@@ -281,8 +294,13 @@ void DSWP::loopSplit(Loop *L) {
 					newToOld[newInst] = inst;
 				}
 				instMap[i][inst] = newInst;
-			}
-		}
+
+				//newInst->dump();
+				NBB->getInstList().push_back(newInst);
+			}// for inst
+		}// for BB
+
+
 
 		/*
 		 * Insert load instruction to load argument, (replace the live in variables)
@@ -294,7 +312,7 @@ void DSWP::loopSplit(Loop *L) {
 		Argument *args = arglist.begin(); //the function only have one argmument
 
 		BitCastInst *castArgs = new BitCastInst(args, PointerType::get(
-				Type::getInt8Ty(*context), 0));
+				Type::getInt8PtrTy(*context), 0));
 		castArgs->insertBefore(newToHeader);
 
 		for (unsigned j = 0; j < livein.size(); j++) {
@@ -305,8 +323,11 @@ void DSWP::loopSplit(Loop *L) {
 			ele_addr->insertBefore(newToHeader);
 			LoadInst * ele_val = new LoadInst(ele_addr);
 			ele_val->insertBefore(newToHeader);
+
 			Value *val = livein[j];
-			instMap[i][val] = ele_val;
+			BitCastInst *ele_fin = new BitCastInst(ele_val, val->getType());
+			ele_fin->insertBefore(newToHeader);
+			instMap[i][val] = ele_fin;
 		}
 
 		/*
@@ -316,10 +337,16 @@ void DSWP::loopSplit(Loop *L) {
 			Instruction *inst = &(*ii);
 			for (unsigned j = 0; j < inst->getNumOperands(); j++) {
 				Value *op = inst->getOperand(j);
+
+				if (isa<BasicBlock>(op))
+					continue;
+
 				if (Value * newArg = instMap[i][op]) {
 					inst->setOperand(j, newArg);
-				} else {
+				} else if (oldToNew[op]){
+					//inst->dump();
 					inst->setOperand(j, oldToNew[op]);	//set a new variable but is in other thread, however, now we don't have ref to original loop
+					error("dswp4, here should be careful, not neccessary a error");
 				}
 			}
 		}
@@ -330,7 +357,6 @@ void DSWP::loopSplit(Loop *L) {
 	 */
 
 	//cout << "test_now" << endl;
-	return;
 
 	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
 	//	Instruction *allocPos = func->getEntryBlock().getTerminator();
@@ -344,6 +370,7 @@ void DSWP::loopSplit(Loop *L) {
 }
 
 void DSWP::deleteLoop(Loop *L) {
+	cout << "begin to delete loop" << endl;
 	for (Loop::block_iterator bi = L->block_begin(), bi2; bi != L->block_end(); bi = bi2) {
 		bi2 = bi;
 		bi2++;
@@ -353,9 +380,9 @@ void DSWP::deleteLoop(Loop *L) {
 			ii2 = ii;
 			ii2++;
 			Instruction *inst = ii;
-			inst->removeFromParent();
+			inst->eraseFromParent();
 		}
-		BB->removeFromParent();
+		BB->eraseFromParent();
 	}
 }
 
