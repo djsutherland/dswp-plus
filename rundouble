@@ -1,0 +1,19 @@
+#!/bin/bash
+
+clear
+make
+
+cd Example
+llvm-gcc -O0 -emit-llvm -c simpledouble.c -o simple.o
+
+llvm-dis -show-annotations simple.o
+
+opt -load ~/Programs/llvm/Debug/lib/DSWP.so -dswp simple.o -o out.o
+
+llvm-dis -show-annotations out.o
+
+#cat showgraph
+#cat dag
+#cat partition
+
+cd ..
