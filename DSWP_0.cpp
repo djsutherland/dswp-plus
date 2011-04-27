@@ -48,16 +48,19 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		produce_arg.push_back(Type::getInt32Ty(*context));
 		FunctionType *produce_ft = FunctionType::get(Type::getVoidTy(*context), produce_arg, false);
 		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", module);
+		produce->setCallingConv(CallingConv::C);
 
 		//add syn_consume function
 		vector<const Type *> consume_arg;
 		consume_arg.push_back(Type::getInt32Ty(*context));
 		FunctionType *consume_ft = FunctionType::get(Type::getInt8PtrTy(*context), consume_arg, false);
 		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
+		consume->setCallingConv(CallingConv::C);
 
 		//add sync_join
 		FunctionType *join_ft = FunctionType::get(Type::getVoidTy(*context), false);
 		Function *join = Function::Create(join_ft, Function::ExternalLinkage, "sync_join", module);
+		join->setCallingConv(CallingConv::C);
 
 		//add sync_delegate
 		vector<const Type *>  argFunArg;
@@ -72,6 +75,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		delegate_arg.push_back(arg3);
 		FunctionType *delegate_ft = FunctionType::get(Type::getVoidTy(*context), delegate_arg, false);
 		Function *delegate = Function::Create(delegate_ft, Function::ExternalLinkage, "sync_delegate", module);
+		delegate->setCallingConv(CallingConv::C);
 	}
 	return true;
 }
@@ -108,7 +112,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	preLoopSplit(L);
 	loopSplit(L);
 	insertSynchronization(L);
-	deleteLoop(L);
+	clearup(L);
 	cout << "//////////////////////////// we finsih run on a loop " << endl;
 	return true;
 }

@@ -36,7 +36,6 @@ void DSWP::preLoopSplit(Loop *L) {
 			}
 		}
 	}
-	//TODO DOUBLE CHECK IF THIS WOULD CHANGE THE POST DOMINATOR TREE STRUCTURE!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	for (Loop::block_iterator li = L->block_begin(); li != L->block_end(); li++) {
 		BasicBlock *BB = *li;
@@ -298,7 +297,7 @@ void DSWP::loopSplit(Loop *L) {
 							//TODO check if there are two branch, one branch is not in the partition, then what the branch
 						}
 					}
-					oldToNew[inst] = newInst;	//should not use
+					//oldToNew[inst] = newInst;	//should not use
 				}
 				instMap[i][inst] = newInst;
 				newInstAssigned[newInst] = i;
@@ -380,7 +379,36 @@ void DSWP::loopSplit(Loop *L) {
 	//	}
 }
 
-void DSWP::deleteLoop(Loop *L) {
+void DSWP::clearup(Loop *L) {
+
+	/*
+	 * move the produce instruction which been inserted after the branch in front of it
+	 */
+	for (int i = 0; i < MAX_THREAD; i++) {
+		for (Function::iterator bi = allFunc[i]->begin(); bi != allFunc[i]->end(); bi++) {
+			BasicBlock * bb = bi;
+			TerminatorInst *term = NULL;
+			for (BasicBlock::iterator ii = bb->begin(); ii != bb->end(); ii++) {
+				Instruction *inst = ii;
+				if (isa<TerminatorInst>(inst)) {
+					term = dyn_cast<TerminatorInst>(inst);
+					break;
+				}
+			}
+
+			if (term == NULL) {
+				error("term cannot be null");
+			}
+
+			while (1) {
+				Instruction *last = &bb->getInstList().back();
+				if (isa<TerminatorInst>(last))
+					break;
+				last->moveBefore(term);
+			}
+		}
+	}
+
 	cout << "begin to delete loop" << endl;
 	for (Loop::block_iterator bi = L->block_begin(), bi2; bi != L->block_end(); bi = bi2) {
 		bi2 = bi;
@@ -397,7 +425,7 @@ void DSWP::deleteLoop(Loop *L) {
 	}
 
 	for (int i = 0; i < MAX_THREAD; i++) {
-		allFunc[i]->dump();
+//		allFunc[i]->dump();
 	}
 	cout << "other stuff" << endl;
 

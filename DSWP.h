@@ -140,11 +140,11 @@ private:
 
 	void loopSplit(Loop *L);
 
-	void deleteLoop(Loop *L);
+	void clearup(Loop *L);
 
 	//map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu (terminators)
 	map<Value*, Value*> instMap[MAX_THREAD]; //map the new instruction to the old instuction
-	map<Value *, Value *> oldToNew;				//direct map without take thread number as arugment
+//	map<Value *, Value *> oldToNew;				//direct map without take thread number as arugment
 	map<Value *, Value *> newToOld;
 	map<Value *, int> newInstAssigned;		//the assignment for each newly generated instruction
 

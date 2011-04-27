@@ -57,7 +57,10 @@ void DSWP::buildPDG(Loop *L) {
 	}
 
 	//LoopInfo &li = getAnalysis<LoopInfo>();
-	PostDominatorTree &pdt = getAnalysis<PostDominatorTree>();
+
+	/*
+	 * Memory dependency analysis
+	 */
 	MemoryDependenceAnalysis &mda = getAnalysis<MemoryDependenceAnalysis>();
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
@@ -101,13 +104,15 @@ void DSWP::buildPDG(Loop *L) {
 		}//for ii
 	}//for bi
 
-	//begin control dependence
-	//initialize pre
+	/*
+	 * begin control dependence
+	 */
 
+	PostDominatorTree &pdt = getAnalysis<PostDominatorTree>();
 	//cout << pdt.getRootNode()->getBlock()->getNameStr() << endl;
-	//for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-	Function *fun = L->getHeader()->getParent();
-	for (Function::iterator bi = fun->begin(); bi != fun->end(); bi++) {
+
+	//build information for predecessor of blocks in post dominator tree
+	for (Function::iterator bi = func->begin(); bi != func->end(); bi++) {
 		BasicBlock *BB = bi;
 		DomTreeNode *dn = pdt.getNode(BB);
 
@@ -116,7 +121,7 @@ void DSWP::buildPDG(Loop *L) {
 			pre[CB] = BB;
 		}
 	}
-
+//
 	//add dependency within a basicblock
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
@@ -130,12 +135,7 @@ void DSWP::buildPDG(Loop *L) {
 		}
 	}
 
-
-	//end control dependece
-
-	//TODO check edge exist
 	//TODO the special kind of dependence need loop peeling ? I don't know whether this is needed
-	//TODO consider how to deal with phi node, now there is no phi node
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
 		for (succ_iterator PI = succ_begin(BB); PI != succ_end(BB); ++PI) {

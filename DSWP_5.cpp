@@ -106,10 +106,10 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		error("here cannot be null");
 	}
 
-	if (isa<BranchInst>(u)) {
-		error("I don't know how do deal with it");
-		return;
-	}
+	//if (isa<BranchInst>(u)) {
+	//	error("I don't know how do deal with it");
+	//	return;
+	//}
 
 	if (dtype == REG) {	//register dep
 		CastInst *cast;
