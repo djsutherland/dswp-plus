@@ -80,6 +80,10 @@ void DSWP::threadPartition(Loop *L) {
 	//	cout << i << "  " << assigned[i] << endl;
 		part[assigned[i]].push_back(i);
 	}
+
+	for (int i = 0; i < MAX_THREAD; i++) {
+		cout << part[i].size() << endl;
+	}
 }
 
 int DSWP::getLatency(Instruction *I) {

@@ -171,7 +171,7 @@ void DSWP::loopSplit(Loop *L) {
 
 //		cout << part[i].size() << endl;
 
-		relbb.insert(header);
+		//relbb.insert(header);
 
 		/*
 		 * analysis the dependent blocks
@@ -214,7 +214,6 @@ void DSWP::loopSplit(Loop *L) {
 		if (relbb.size() == 0) {
 			error("has size 0");
 		}
-
 
 		/*
 		 * Create the new blocks to the new function, including an entry and exit
