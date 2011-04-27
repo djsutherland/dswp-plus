@@ -457,7 +457,6 @@ void DSWP::clearup(Loop *L) {
 	}
 	cout << "other stuff" << endl;
 
-	generated.clear();
 	pdg.clear();
 	rev.clear();
 	dag.clear();
