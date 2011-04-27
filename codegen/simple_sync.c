@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include "queue.h"
 #include "simple_sync.h"
 
@@ -14,7 +15,7 @@ unsigned long long sync_consume(int val_id) {
 
 // called by master thread
 // sends function pointers to the auxiliary threads
-void sync_delegate(int tid, void *(*fp)(void *), void *args[]) {
+void sync_delegate(int tid, void *(*fp)(void *), unsigned long long args[]) {
   pthread_create(&threads[tid], NULL, fp, (void *)args);
 }
 
