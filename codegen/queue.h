@@ -10,7 +10,7 @@
 #define QUEUE_MAXLEN 32
 
 typedef struct {
-  void *arr[QUEUE_MAXLEN];
+  unsigned long long arr[QUEUE_MAXLEN];
   int head;
   int tail;
   int size;
@@ -26,12 +26,12 @@ void queue_destroy(queue_t *q);
  * Pushes the specified element onto the end of the queue.  Blocks if the queue 
  * is full.
  */
-void queue_push(queue_t *q, void *elem);
+void queue_push(queue_t *q, unsigned long long elem);
 
 /*
  * Pops the next element off the head of the queue.  Blocks if the queue is 
  * empty.
  */
-void *queue_pop(queue_t *q);
+unsigned long long queue_pop(queue_t *q);
 
 #endif

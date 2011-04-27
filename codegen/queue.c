@@ -16,7 +16,7 @@ void queue_destroy(queue_t *q) {
   pthread_cond_destroy(&(q->full_cvar));
 }
 
-void queue_push(queue_t *q, void *elem) {
+void queue_push(queue_t *q, unsigned long long elem) {
   pthread_mutex_lock(&(q->mutex));
   while (q->size == QUEUE_MAXLEN) {
     pthread_cond_wait(&(q->full_cvar), &(q->mutex));
@@ -29,13 +29,13 @@ void queue_push(queue_t *q, void *elem) {
   pthread_mutex_unlock(&(q->mutex));
 }
 
-void *queue_pop(queue_t *q) {
+unsigned long long queue_pop(queue_t *q) {
   pthread_mutex_lock(&(q->mutex));
   while (q->size == 0) {
     pthread_cond_wait(&(q->empty_cvar), &(q->mutex));
   }
 
-  void *ret_val = q->arr[q->head];
+  unsigned long long ret_val = q->arr[q->head];
   q->head = (q->head + 1) % QUEUE_MAXLEN;
   q->size -= 1;
   pthread_cond_signal(&(q->full_cvar));
