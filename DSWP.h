@@ -63,7 +63,9 @@ private:
 	BasicBlock * header;
 	BasicBlock * exit;
 	LLVMContext *context;
+	const Type *eleType;
 	int loopCounter;
+
 	set<Function *> generated;	//all generated function that should not be run in the pass
 	//
 

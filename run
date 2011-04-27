@@ -4,11 +4,11 @@ clear
 make
 
 cd Example
-llvm-gcc -O0 -emit-llvm -c simple.c
+llvm-gcc -O0 -emit-llvm -c loop.c -o obj.o
 
-llvm-dis simple.o
+llvm-dis obj.o
 
-opt -load ~/Programs/llvm/Debug/lib/DSWP.so -dswp simple.o -o out.o
+opt -load ~/Programs/llvm/Debug/lib/DSWP.so -dswp obj.o -o out.o
 
 llvm-dis out.o
 

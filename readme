@@ -9,3 +9,5 @@ reasonable latency table
 TODO block cannot be split ?
 
 modify the function declaration
+
+unoptimized code could split into several thread, but optimized code might not!

@@ -32,6 +32,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 	func = header->getParent();
 	module = func->getParent();
 	context = &module->getContext();
+	eleType = Type::getInt64Ty(*context);
 	loopCounter++;
 
 	if (exit == NULL) {
@@ -42,9 +43,10 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 
 	Function * produce = module->getFunction("sync_produce");
 	if (produce == NULL) {	//the first time, we need to link them
+
 		//add sync_produce function
 		vector<const Type *> produce_arg;
-		produce_arg.push_back(Type::getInt8PtrTy(*context));
+		produce_arg.push_back(eleType);
 		produce_arg.push_back(Type::getInt32Ty(*context));
 		FunctionType *produce_ft = FunctionType::get(Type::getVoidTy(*context), produce_arg, false);
 		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", module);
@@ -53,7 +55,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		//add syn_consume function
 		vector<const Type *> consume_arg;
 		consume_arg.push_back(Type::getInt32Ty(*context));
-		FunctionType *consume_ft = FunctionType::get(Type::getInt8PtrTy(*context), consume_arg, false);
+		FunctionType *consume_ft = FunctionType::get(eleType, consume_arg, false);
 		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
 		consume->setCallingConv(CallingConv::C);
 
@@ -67,7 +69,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		argFunArg.push_back(Type::getInt8PtrTy(*context));
 		FunctionType * argFun = FunctionType::get(Type::getInt8PtrTy(*context), argFunArg, false);
 		PointerType * arg2 = PointerType::get(argFun, 0);
-		PointerType * arg3 = PointerType::get(Type::getInt8PtrTy(*context), 0);
+		PointerType * arg3 = PointerType::get(eleType, 0);
 
 		vector<const Type *> delegate_arg;
 		delegate_arg.push_back(Type::getInt32Ty(*context));

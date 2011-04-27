@@ -138,7 +138,6 @@ void DSWP::buildPDG(Loop *L) {
 		}
 	}
 
-
 	//build information for predecessor of blocks in post dominator tree
 	for (Function::iterator bi = func->begin(); bi != func->end(); bi++) {
 		BasicBlock *BB = bi;

@@ -115,13 +115,16 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		CastInst *cast;
 
 		if (u->getType()->isIntegerTy()) {
-			cast = new IntToPtrInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
+			cast = new SExtInst(u, eleType, u->getNameStr() + "_64");
 		}
 		else if (u->getType()->isFloatingPointTy()) {
-			error("cannot deal with double");
+			if (u->getType()->isFloatTy()) {
+				error("float sucks");
+			}
+			cast = new BitCastInst(u, eleType, u->getNameStr() + "_64");
 		}
 		else if (u->getType()->isPointerTy()){
-			cast = new BitCastInst(u, Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");	//cast value
+			cast = new PtrToIntInst(u, eleType, u->getNameStr() + "_64");	//cast value
 		} else {
 			error("what's the hell type");
 		}
@@ -130,6 +133,8 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		args.push_back(cast);													//push the value
 	}
 	else if (dtype == DTRUE) { //true dep
+		error("check mem dep!!");
+
 		StoreInst *store = dyn_cast<StoreInst>(u);
 		if (store == NULL) {
 			error("not true dependency!");
@@ -138,7 +143,7 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		cast->insertBefore(insPos);
 		args.push_back(cast);													//push the value											//insert call
 	} else {	//others
-		args.push_back(Constant::getNullValue( Type::getInt8PtrTy(*context) ) );			//just a dummy value
+		args.push_back(Constant::getNullValue( Type::getInt64Ty(*context) ) );			//just a dummy value
 	}
 
 	args.push_back(ConstantInt::get(Type::getInt32Ty(*context), channel));
@@ -163,13 +168,15 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 		CastInst *cast;
 
 		if (u->getType()->isIntegerTy()) {
-			cast = new PtrToIntInst(call, u->getType(), call->getNameStr() + "_val");
+			cast = new TruncInst(call, u->getType(), call->getNameStr() + "_val");
 		}
 		else if (u->getType()->isFloatingPointTy()) {
-			error("cannot deal with double");
+			if (u->getType()->isFloatTy())
+				error("cannot deal with double");
+			cast = new BitCastInst(call, u->getType(), call->getNameStr() + "_val");	//cast value
 		}
 		else if (u->getType()->isPointerTy()){
-			cast = new BitCastInst(call, u->getType(), call->getNameStr() + "_val");	//cast value
+			cast = new IntToPtrInst(call, u->getType(), call->getNameStr() + "_val");	//cast value
 		} else {
 			error("what's the hell type");
 		}
@@ -211,13 +218,13 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 		}
 
 	} else if (dtype == DTRUE) {	//READ after WRITE
+		error("check mem dep!!");
+
 		if (!isa<LoadInst>(v)) {
 			error("not true dependency");
 		}
 		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getNameStr() + "_ptr");
 		cast->insertBefore(v);
-
-		cout << "replace mem" << endl;
 
 		//replace the v with 'cast' in v's thread: (other thread with be dealed using dependence)
 		for (Instruction::use_iterator ui = v->use_begin(); ui != v->use_end(); ui++) {
