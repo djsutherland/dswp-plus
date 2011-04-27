@@ -457,6 +457,29 @@ void DSWP::clearup(Loop *L) {
 	}
 	cout << "other stuff" << endl;
 
+	generated.clear();
+	pdg.clear();
+	rev.clear();
+	dag.clear();
+	allEdges.clear();
+	InstInSCC.clear();
+	pre.clear();
+	sccId.clear();
+	used.clear();
+	list.clear();
+	assigned.clear();
+	for (int i = 0; i < MAX_THREAD; i++) {
+		part[i].clear();
+		instMap[i].clear();
+	}
+	sccLatency.clear();
+	newToOld.clear();
+	newInstAssigned.clear();
+	allFunc.clear();
+	livein.clear();
+	defin.clear();
+	liveout.clear();
+	dname.clear();
 	//cout << Type::getInt8PtrTy(*context, 0)->
 }
 

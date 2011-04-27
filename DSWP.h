@@ -132,7 +132,7 @@ private:
 
 	//part[i] = i thread contains part[i] nodes of the dag
 	vector<int> part[MAX_THREAD];
-	set<BasicBlock *> BBS[MAX_THREAD];
+	//set<BasicBlock *> BBS[MAX_THREAD];
 
 	//total lantency within a scc
 	vector<int> sccLatency;
