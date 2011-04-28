@@ -133,18 +133,18 @@ void DSWP::preLoopSplit(Loop *L) {
 				(uint64_t) i)); //tid
 		args.push_back(func); //the function pointer
 
-		//PointerType * finalType = PointerType::get(eleType, 0);
-		const Type * finalType = Type::getInt8PtrTy(*context); //debug
+		PointerType * finalType = PointerType::get(eleType, 0);
+		//const Type * finalType = Type::getInt8PtrTy(*context); //debug
 
 		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
 		finalArg->insertBefore(brInst);
 
 		args.push_back(finalArg); //true arg that will be call by func
-//		CallInst * callfunc = CallInst::Create(delegate, args.begin(),
-//				args.end());
-		vector<Value *> targs;
-		targs.push_back(finalArg);
-		CallInst * callfunc = CallInst::Create(allFunc[i], targs.begin(), targs.end());
+		CallInst * callfunc = CallInst::Create(delegate, args.begin(),
+				args.end());
+//		vector<Value *> targs;
+//		targs.push_back(finalArg);
+//		CallInst * callfunc = CallInst::Create(allFunc[i], targs.begin(), targs.end());
 
 		callfunc->insertBefore(brInst);
 	}

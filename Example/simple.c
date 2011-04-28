@@ -13,9 +13,10 @@ int fun(int a) {
 		//getchar();
 		//printf("%d %d\n", a, *((int *)a));
 		printf("%d\n", i);
-		res = res + i;
+		//res = res + i;
 		//break;
 	}
+	//printf("%d\n", 
 	return res;
 }
 

@@ -37,6 +37,7 @@ static const int MAX_THREAD = 1;
 //DANTI: data dependency - write after read
 //DOUT: data dependency - write after write
 //DSYN: data dependency - read after read
+
 enum DType {
 	REG, DTRUE, DANTI, DOUT, DSYN, CONTROL, CONTROL_LC
 };
