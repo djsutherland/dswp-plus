@@ -8,29 +8,29 @@ static queue_t *q;
 static void *produce(void *arg) {
   int i;
   for (i = 0; i < 100000; i++) {
-    push(q, (void *)1);
+    queue_push(q, 1);
   }
   return NULL;
 }
 
 static void *consume(void *arg) {
   int i;
-  unsigned int sum = 0;
+  unsigned long long sum = 0;
   for (i = 0; i < 100000; i++) {
-    sum += (unsigned int)pop(q);
+    sum += queue_pop(q);
   }
   return (void *)sum;
 }
 
 static void *block_consume(void *arg) {
-  unsigned int result = (unsigned int)pop(q);
+  unsigned long long result = queue_pop(q);
   return (void *)result;
 }
 
 static void *block_produce(void *arg) {
   int i;
   for (i = 0; i < QUEUE_MAXLEN + 1; i++) {
-    push(q, (void *)i);
+    queue_push(q, i);
   }
   printf("Blocked producer done!\n");
   return NULL;
@@ -41,8 +41,10 @@ int main(int argc, char *argv[]) {
   pthread_t consumers[10];
   int i;
 
+  q = (queue_t *)malloc(sizeof(queue_t));
+
   printf("Initialize queue...");
-  init(&q);
+  queue_init(q);
   printf("Done.\n");
   
   printf("Creating producers and consumers...");
@@ -66,7 +68,7 @@ int main(int argc, char *argv[]) {
   printf("Checking blocking functionality...\n");
   pthread_create(&consumers[0], NULL, block_consume, NULL);
   sleep(2);
-  push(q, (void *)42);
+  queue_push(q, 42);
   pthread_join(consumers[0], ((void **)&ret_val));
   if (ret_val != 42) {
     printf("ERROR: value mismatched: %u\n", ret_val);
@@ -76,7 +78,7 @@ int main(int argc, char *argv[]) {
   printf("Sleeping: producer shouldn't finish during this time.\n");
   sleep(2);
   printf("Done sleeping, consuming so producer can finish...\n");
-  pop(q);
+  queue_pop(q);
   pthread_join(producers[0], NULL);
   printf("Done.\n");
 
