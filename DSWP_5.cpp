@@ -23,6 +23,9 @@ void DSWP::insertSynchronization(Loop *L) {
 				if (utr == vtr)
 					continue;
 
+				if (getInstAssigned(e.u) != utr)
+					continue;
+
 				if (instMap[utr][e.u] == NULL || instMap[vtr][e.v] == NULL)
 					continue;
 
