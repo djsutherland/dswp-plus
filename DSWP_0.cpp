@@ -78,6 +78,26 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		FunctionType *delegate_ft = FunctionType::get(Type::getVoidTy(*context), delegate_arg, false);
 		Function *delegate = Function::Create(delegate_ft, Function::ExternalLinkage, "sync_delegate", module);
 		delegate->setCallingConv(CallingConv::C);
+
+		//add show value
+		vector<const Type *> show_arg;
+		show_arg.push_back(Type::getInt64Ty(*context));
+		FunctionType *show_ft = FunctionType::get(Type::getVoidTy(*context), show_arg, false);
+		Function *show = Function::Create(show_ft, Function::ExternalLinkage, "showValue", module);
+		show->setCallingConv(CallingConv::C);
+
+		//add showPlace value
+		vector<const Type *> show2_arg;
+		FunctionType *show2_ft = FunctionType::get(Type::getVoidTy(*context), show2_arg, false);
+		Function *show2 = Function::Create(show2_ft, Function::ExternalLinkage, "showPlace", module);
+		show2->setCallingConv(CallingConv::C);
+
+		//add showPtr value
+		vector<const Type *> show3_arg;
+		show3_arg.push_back(Type::getInt8PtrTy(*context));
+		FunctionType *show3_ft = FunctionType::get(Type::getVoidTy(*context), show3_arg, false);
+		Function *show3 = Function::Create(show3_ft, Function::ExternalLinkage, "showPtr", module);
+		show3->setCallingConv(CallingConv::C);
 	}
 	return true;
 }

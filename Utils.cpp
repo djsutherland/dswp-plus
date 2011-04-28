@@ -19,7 +19,6 @@ void error(string info) {
 	printf("%s\n", info.c_str());
 }
 
-
 int Utils::id = 0;
 
 string Utils::genId() {

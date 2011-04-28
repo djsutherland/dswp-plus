@@ -30,13 +30,14 @@
 using namespace llvm;
 using namespace std;
 
-static const int MAX_THREAD = 2;
+static const int MAX_THREAD = 1;
 
 //REG: register dependency
 //DTRUE: data dependency - read after write
 //DANTI: data dependency - write after read
 //DOUT: data dependency - write after write
 //DSYN: data dependency - read after read
+
 enum DType {
 	REG, DTRUE, DANTI, DOUT, DSYN, CONTROL, CONTROL_LC
 };
