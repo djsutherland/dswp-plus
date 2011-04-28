@@ -1,0 +1,27 @@
+#!/bin/bash
+
+clear
+make
+
+cd runtime
+make
+cd ..
+
+cd Example
+llvm-gcc -O0 -emit-llvm -c simple.c -o obj.o
+
+llvm-dis obj.o
+
+opt -load ~/Programs/llvm/Debug/lib/DSWP.so -dswp obj.o -o out.o
+
+llvm-dis out.o
+
+llvm-ld out.o ../runtime/queue.o  ../runtime/simple_sync.o
+
+./a.out
+
+#cat showgraph
+#cat dag
+#cat partition
+
+cd ..

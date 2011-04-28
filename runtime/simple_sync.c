@@ -19,13 +19,15 @@ void showValue(unsigned long long elem) {
 }
 
 void sync_produce(unsigned long long elem, int val_id) {
-	printf("lld\n", elem);
+	//printf("%lld\n", elem);
+	printf("produce in %d\n", val_id);
 	queue_push(&data_queues[val_id], elem);
 }
 
 unsigned long long sync_consume(int val_id) {
 	unsigned long long res = queue_pop(&data_queues[val_id]);
-	printf("lld\n", res);
+	printf("consume in %d\n", val_id);
+//	printf("%lld\n", res);
 	return res;
 }
 
