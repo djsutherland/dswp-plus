@@ -80,7 +80,6 @@ void DSWP::preLoopSplit(Loop *L) {
 	for (unsigned i = 0; i < livein.size(); i++) {
 		Value *val = livein[i];
 
-
 		CastInst * castVal;
 
 		if (val->getType()->isIntegerTy()) {
@@ -156,9 +155,9 @@ void DSWP::preLoopSplit(Loop *L) {
 	/*
 	 * join them back
 	 */
-//	Function *join = module->getFunction("sync_join");
-//	CallInst *callJoin = CallInst::Create(join);
-//	callJoin->insertBefore(brInst);
+	Function *join = module->getFunction("sync_join");
+	CallInst *callJoin = CallInst::Create(join);
+	callJoin->insertBefore(brInst);
 
 	//replaceBlock->dump();	//check if the new block is correct
 
@@ -351,6 +350,11 @@ void DSWP::loopSplit(Loop *L) {
 		}
 		Argument *args = arglist.begin(); //the function only have one argmument
 
+		Function *showPlace = module->getFunction("showPlace");
+		vector<Value *> placeArg;
+		CallInst *inHeader = CallInst::Create(showPlace, placeArg.begin(), placeArg.end());
+		inHeader->insertBefore(newToHeader);
+
 		BitCastInst *castArgs = new BitCastInst(args, PointerType::get(
 				Type::getInt64Ty(*context), 0));
 		castArgs->insertBefore(newToHeader);
@@ -402,11 +406,6 @@ void DSWP::loopSplit(Loop *L) {
 			ele_cast->insertBefore(newToHeader);
 			instMap[i][val] = ele_cast;
 		}
-
-//		Function *showPlace = module->getFunction("showPlace");
-//		vector<Value *> placeArg;
-//		CallInst *inHeader = CallInst::Create(showPlace, placeArg.begin(), placeArg.end());
-//		inHeader->insertBefore(newToHeader);
 
 		/*
 		 * Replace the use of intruction def in the function (reg dep should be finshied in insert syn

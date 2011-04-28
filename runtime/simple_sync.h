@@ -1,7 +1,7 @@
 #ifndef SIMPLE_SYNC_H
 #define SIMPLE_SYNC_H
 
-#define NUM_THREADS 1
+#define NUM_THREADS 2
 #define NUM_QUEUES 256
 
 void showPtr(void *elem);
