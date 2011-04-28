@@ -30,7 +30,7 @@
 using namespace llvm;
 using namespace std;
 
-static const int MAX_THREAD = 2;
+static const int MAX_THREAD = 1;
 
 //REG: register dependency
 //DTRUE: data dependency - read after write

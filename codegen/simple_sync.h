@@ -1,9 +1,12 @@
 #ifndef SIMPLE_SYNC_H
 #define SIMPLE_SYNC_H
 
-#define NUM_THREADS 2
+#define NUM_THREADS 1
 #define NUM_QUEUES 256
 
+void showPtr(void *elem);
+void showPlace();
+void showValue(unsigned long long elem);
 void sync_produce(unsigned long long elem, int val_id);
 unsigned long long sync_consume(int val_id);
 void sync_delegate(int tid, void *(*fp)(void *), unsigned long long args[]);

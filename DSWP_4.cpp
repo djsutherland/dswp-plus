@@ -103,7 +103,7 @@ void DSWP::preLoopSplit(Loop *L) {
 				(uint64_t) i);
 		//GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,"");		//use this cannot get the right type!
 		vector<Value *> arg;
-		arg.push_back(idx);
+		arg.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
 		arg.push_back(idx);
 		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg,
 				arg.begin(), arg.end(), "");
@@ -113,7 +113,14 @@ void DSWP::preLoopSplit(Loop *L) {
 
 		StoreInst * storeVal = new StoreInst(castVal, ele_addr);
 		storeVal->insertBefore(brInst);
+
+//		vector<Value *> showArg;
+//		showArg.push_back(castVal);
+//		Function *show = module->getFunction("showValue");
+//		CallInst *callShow = CallInst::Create(show, showArg.begin(), showArg.end());
+//		callShow->insertBefore(brInst);
 	}
+
 
 	/*
 	 * call functions
@@ -126,22 +133,28 @@ void DSWP::preLoopSplit(Loop *L) {
 				(uint64_t) i)); //tid
 		args.push_back(func); //the function pointer
 
-		PointerType * finalType = PointerType::get(eleType, 0);
+		//PointerType * finalType = PointerType::get(eleType, 0);
+		const Type * finalType = Type::getInt8PtrTy(*context); //debug
+
 		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
 		finalArg->insertBefore(brInst);
 
 		args.push_back(finalArg); //true arg that will be call by func
-		CallInst * callfunc = CallInst::Create(delegate, args.begin(),
-				args.end());
+//		CallInst * callfunc = CallInst::Create(delegate, args.begin(),
+//				args.end());
+		vector<Value *> targs;
+		targs.push_back(finalArg);
+		CallInst * callfunc = CallInst::Create(allFunc[i], targs.begin(), targs.end());
+
 		callfunc->insertBefore(brInst);
 	}
 
 	/*
 	 * join them back
 	 */
-	Function *join = module->getFunction("sync_join");
-	CallInst *callJoin = CallInst::Create(join);
-	callJoin->insertBefore(brInst);
+//	Function *join = module->getFunction("sync_join");
+//	CallInst *callJoin = CallInst::Create(join);
+//	callJoin->insertBefore(brInst);
 
 	//replaceBlock->dump();	//check if the new block is correct
 
@@ -259,6 +272,9 @@ void DSWP::loopSplit(Loop *L) {
 		}
 		BranchInst * newToHeader = BranchInst::Create(BBMap[header], newEntry); //pointer to the header so loop can be executed
 
+		//BranchInst * newToHeader = BranchInst::Create(newExit, newEntry); //pointer to the header so loop can be executed
+
+
 		ReturnInst * newRet = ReturnInst::Create(*context,
 				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit); //return null
 
@@ -336,13 +352,30 @@ void DSWP::loopSplit(Loop *L) {
 		castArgs->insertBefore(newToHeader);
 
 		for (unsigned j = 0; j < livein.size(); j++) {
+			cout << livein[j]->getNameStr() << endl;
+
 			ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
 					(uint64_t) j);
-			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(castArgs,
-					idx, ""); //get the element ptr
+			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(castArgs, idx, ""); //get the element ptr
 			ele_addr->insertBefore(newToHeader);
 			LoadInst * ele_val = new LoadInst(ele_addr);
+			ele_val->setAlignment(8);
+			ele_val->setName(livein[j]->getNameStr() + "_val");
 			ele_val->insertBefore(newToHeader);
+
+//			BitCastInst *addcast = new BitCastInst(ele_addr, Type::getInt8PtrTy(*context));
+//			addcast->insertBefore(newToHeader);
+//			vector<Value *> showArg2;
+//			showArg2.push_back(addcast);
+//			Function *showptr = module->getFunction("showPtr");
+//			CallInst *callShowptr = CallInst::Create(showptr, showArg2.begin(), showArg2.end());
+//			callShowptr->insertBefore(newToHeader);
+//
+			vector<Value *> showArg;
+			showArg.push_back(ele_val);
+			Function *show = module->getFunction("showValue");
+			CallInst *callShow = CallInst::Create(show, showArg.begin(), showArg.end());
+			callShow->insertBefore(newToHeader);
 
 			Value *val = livein[j];
 			CastInst *ele_cast;
@@ -350,6 +383,8 @@ void DSWP::loopSplit(Loop *L) {
 			if (val->getType()->isIntegerTy()) {
 				ele_cast = new TruncInst(ele_val, val->getType());
 			} else if (val->getType()->isPointerTy()) {
+				ele_cast = new TruncInst(ele_val, Type::getInt32Ty(*context));
+				ele_cast->insertBefore(newToHeader);
 				ele_cast = new IntToPtrInst(ele_val, val->getType());
 			} else if (val->getType()->isFloatingPointTy()) {
 				if (val->getType()->isFloatTy())
@@ -363,6 +398,11 @@ void DSWP::loopSplit(Loop *L) {
 			ele_cast->insertBefore(newToHeader);
 			instMap[i][val] = ele_cast;
 		}
+
+//		Function *showPlace = module->getFunction("showPlace");
+//		vector<Value *> placeArg;
+//		CallInst *inHeader = CallInst::Create(showPlace, placeArg.begin(), placeArg.end());
+//		inHeader->insertBefore(newToHeader);
 
 		/*
 		 * Replace the use of intruction def in the function (reg dep should be finshied in insert syn
@@ -387,7 +427,7 @@ void DSWP::loopSplit(Loop *L) {
 			}
 		}
 
-		curFunc->dump();
+		//curFunc->dump();
 	}
 
 	/*
