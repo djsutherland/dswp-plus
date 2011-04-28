@@ -6,29 +6,20 @@
 static pthread_t threads[NUM_THREADS];
 static queue_t data_queues[NUM_QUEUES];
 
-void showPlace() {
-	printf("I'm here!\n");
-}
 
-void showPtr(void *elem) {
-	printf("show pointer: %d\n", elem);
-}
-
-void showValue(unsigned long long elem) {
-	printf("show value: %lld \t %d\n", elem, *((int *) elem));
-}
 
 void sync_produce(unsigned long long elem, int val_id) {
 	//printf("%lld\n", elem);
-	printf("produce in %d\n", val_id);
+	//printf("produce in %d\n", val_id);
 	queue_push(&data_queues[val_id], elem);
 }
 
 unsigned long long sync_consume(int val_id) {
-	unsigned long long res = queue_pop(&data_queues[val_id]);
-	printf("consume in %d\n", val_id);
+//	unsigned long long res = queue_pop(&data_queues[val_id]);
+// printf("consume in %d\n", val_id);
 //	printf("%lld\n", res);
-	return res;
+//	return res;
+	return queue_pop(&data_queues[val_id]);
 }
 
 // called by master thread

@@ -3,27 +3,28 @@
 
 int fun(int a) {
 	//printf("%d\n", a);
-	getchar();
+	//getchar();
 	
-	int i = 0, res = 200;
+	int i = 0, res = 200, res2 = 0, j;
 	//res = 0;
 	//printf("begin loop\n");
-	for (i = 0; i < a; i++) {
-		//scanf("%d", &res);
-		//getchar();
-		//printf("%d %d\n", a, *((int *)a));
-		printf("%d\n", i);
-		//res = res + i;
+	for (i = 0; i < a; i++) {		
+		//printf("%d\n", i);
+		res = res + i;
+		//res2 = res2 + i * 2;
+		//for (j = 0; j < i; j++)
+		//	res2 = res2 + 1;
 		//break;
 	}
-	//printf("%d\n", 
+	printf("%d %d\n", res, res2);
+	
 	return res;
 }
 
 int main() {	
 	int res;
 	//printf("program start\n");
-	res = fun(100);
+	res = fun(100000);
 	//printf("program end\n");
 	return 0;
 }

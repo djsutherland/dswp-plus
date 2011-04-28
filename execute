@@ -16,9 +16,20 @@ opt -load ~/Programs/llvm/Debug/lib/DSWP.so -dswp obj.o -o out.o
 
 llvm-dis out.o
 
+llvm-ld obj.o
+echo 'run original code'
+start_time=`date +%s`
+./a.out
+end_time=`date +%s`
+echo execution time was `expr $end_time - $start_time` s.
+
 llvm-ld out.o ../runtime/queue.o  ../runtime/simple_sync.o
 
+echo 'run optimized code'
+start_time=`date +%s`
 ./a.out
+end_time=`date +%s`
+echo execution time was `expr $end_time - $start_time` s.
 
 #cat showgraph
 #cat dag
