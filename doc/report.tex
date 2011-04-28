@@ -63,7 +63,7 @@ The compiler needs the support of a runtime library that will manipulate the nec
 At the beginning of each loop the new threads are created and sent the address of the function they are to execute.  Each dependence gets its own queue. We statically create 256 queues to use for the various dependences.  Each produce in the thread that generates the dependence is matched by a single consume in the thread that requires that dependence.
 
 \section{Experimental Setup}
-We built a loadable module for LLVM that can be called as a separate optimization pass.  We then ran this pass on the otherwise unoptimized SPEC2006 benchmarks.  We compared these results with the results of running the completely unoptimized SPEC2000 benchmarks.
+We built a loadable module for LLVM that can be called as a separate optimization pass.  We then ran this pass on some self-written benchmarks.  We initially intended to run our optimization on the SPEC2006 benchmarks, but we did not have time to run them.
 
 \section{Experimental Results}
 
@@ -71,7 +71,16 @@ We built a loadable module for LLVM that can be called as a separate optimizatio
 \section{Lessons Learned}
 Academic papers are not always explicit about the steps they take in their implementations.  We had to intuit many of the necessary details to make the compilation process work.
 
-\section{Conclusions}
+Additionally, our software engineering skills could be worked on, specifically our estimation of project size and our time allocation.  This project was a more significant undertaking than we initially thought.  Currently the project sits at about 2 KLOC and still more could be done.  
 
+\section{Future Work}
+We still need to test our implementation more on more complex programs, for example, the SPEC2006 benchmarks on multiple platforms, especially machines with higher numbers of cores.  These tests would help us verify that our implementation was correct and it would also gives us a better idea of how a software-only implementation of DSWP compares to unoptimized code as well as hardware-supported DSWP.
+
+The way that we rewrite the program causes a lot of overhead in that we start a group of threads at the beginning of each loop body and then join them at the end of the loop body.  We could reduce this initialization overhead by creating all the threads at the beginning of the program or perhaps lazily when we encounter our first loop body,since whether we encounter any loop bodies is undecidable in general.  We would then keep those threads throughout the rest of the program, dispatching them to different functions based on whatever loops we encounter.  We chose our current implementation because it was much simpler to implement for an initial version.
+
+Since we have a different implementation of thread synchronization our model for the costs of synchronization could be significantly different from those defined in previous papers.  We could investigate these costs further to get more accurate heuristics, thereby improving the quality of our thread partitioning.
+
+\section{Conclusions}
+Despite the lack of official benchmark results, we can hypothesize that our software-only implementation of DSWP will not be able to compete with a similar implementation with custom hardware support.  However, we have presented a method to extract thread-level parallelism from general loop bodies in a more platform-independent fashion than the previous state-of-the-art.
 
 \end{document}
