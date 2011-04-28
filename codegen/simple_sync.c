@@ -15,7 +15,7 @@ void showPtr(void *elem) {
 }
 
 void showValue(unsigned long long elem) {
-	printf("show value: %lld \t %d\n", elem, *((int *)elem));
+	printf("show value: %lld \t %d\n", elem, *((int *) elem));
 }
 
 void sync_produce(unsigned long long elem, int val_id) {
@@ -43,3 +43,12 @@ void sync_join() {
 		pthread_join(threads[i], NULL);
 	}
 }
+
+void sync_init() {
+	printf("init\n");
+	int i;
+	for (i = 0; i < NUM_QUEUES; i++) {
+		queue_init(&data_queues[i]);
+	}
+}
+

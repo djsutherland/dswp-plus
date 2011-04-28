@@ -40,7 +40,7 @@ void DSWP::preLoopSplit(Loop *L) {
 	for (Loop::block_iterator li = L->block_begin(); li != L->block_end(); li++) {
 		BasicBlock *BB = *li;
 		if (BB == replaceBlock) {
-			error("the blokc should not appear here!");
+			error("the block should not appear here!");
 		}
 	}
 
@@ -121,6 +121,10 @@ void DSWP::preLoopSplit(Loop *L) {
 //		callShow->insertBefore(brInst);
 	}
 
+	Function *init = module->getFunction("sync_init");
+	vector<Value *> args;
+	CallInst *callInit = CallInst::Create(init, args.begin(), args.end());
+	callInit->insertBefore(brInst);
 
 	/*
 	 * call functions
