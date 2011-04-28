@@ -7,7 +7,7 @@ static pthread_t threads[NUM_THREADS];
 static queue_t data_queues[NUM_QUEUES];
 
 void showPlace() {
-	printf("hello hell!\n");
+	printf("I'm here!\n");
 }
 
 void showPtr(void *elem) {
