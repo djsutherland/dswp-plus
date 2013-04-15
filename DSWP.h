@@ -13,7 +13,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
-#include "llvm/Support/IRBuilder.h"
+#include "llvm/IRBuilder.h"
 #include "llvm/LLVMContext.h"
 #include "LivenessAnalysis.h"
 

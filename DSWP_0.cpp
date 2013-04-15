@@ -43,17 +43,17 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 	if (produce == NULL) {	//the first time, we need to link them
 
 		//add sync_produce function
-		vector<const Type *> produce_arg;
-		produce_arg.push_back(eleType);
+		vector<Type *> produce_arg;
+		produce_arg.push_back(const_cast<Type *>(eleType));
 		produce_arg.push_back(Type::getInt32Ty(*context));
 		FunctionType *produce_ft = FunctionType::get(Type::getVoidTy(*context), produce_arg, false);
 		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", module);
 		produce->setCallingConv(CallingConv::C);
 
 		//add syn_consume function
-		vector<const Type *> consume_arg;
+		vector<Type *> consume_arg;
 		consume_arg.push_back(Type::getInt32Ty(*context));
-		FunctionType *consume_ft = FunctionType::get(eleType, consume_arg, false);
+		FunctionType *consume_ft = FunctionType::get(const_cast<Type *>(eleType), consume_arg, false);
 		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
 		consume->setCallingConv(CallingConv::C);
 
@@ -68,13 +68,13 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		init->setCallingConv(CallingConv::C);
 
 		//add sync_delegate
-		vector<const Type *>  argFunArg;
+		vector<Type *>  argFunArg;
 		argFunArg.push_back(Type::getInt8PtrTy(*context));
 		FunctionType * argFun = FunctionType::get(Type::getInt8PtrTy(*context), argFunArg, false);
 		PointerType * arg2 = PointerType::get(argFun, 0);
-		PointerType * arg3 = PointerType::get(eleType, 0);
+		PointerType * arg3 = PointerType::get(const_cast<Type *>(eleType), 0);
 
-		vector<const Type *> delegate_arg;
+		vector<Type *> delegate_arg;
 		delegate_arg.push_back(Type::getInt32Ty(*context));
 		delegate_arg.push_back(arg2);
 		delegate_arg.push_back(arg3);
@@ -83,20 +83,20 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		delegate->setCallingConv(CallingConv::C);
 
 		//add show value
-		vector<const Type *> show_arg;
+		vector<Type *> show_arg;
 		show_arg.push_back(Type::getInt64Ty(*context));
 		FunctionType *show_ft = FunctionType::get(Type::getVoidTy(*context), show_arg, false);
 		Function *show = Function::Create(show_ft, Function::ExternalLinkage, "showValue", module);
 		show->setCallingConv(CallingConv::C);
 
 		//add showPlace value
-		vector<const Type *> show2_arg;
+		vector<Type *> show2_arg;
 		FunctionType *show2_ft = FunctionType::get(Type::getVoidTy(*context), show2_arg, false);
 		Function *show2 = Function::Create(show2_ft, Function::ExternalLinkage, "showPlace", module);
 		show2->setCallingConv(CallingConv::C);
 
 		//add showPtr value
-		vector<const Type *> show3_arg;
+		vector<Type *> show3_arg;
 		show3_arg.push_back(Type::getInt8PtrTy(*context));
 		FunctionType *show3_ft = FunctionType::get(Type::getVoidTy(*context), show3_arg, false);
 		Function *show3 = Function::Create(show3_ft, Function::ExternalLinkage, "showPtr", module);

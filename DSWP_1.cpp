@@ -16,7 +16,7 @@ void DSWP::addControlDependence(BasicBlock *a, BasicBlock *b) {
 void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTree &pdt) {
 	BasicBlock *lca = pdt.findNearestCommonDominator(a, b);
 
-	cout << a->getNameStr() << " " << b->getNameStr() << " " << lca->getNameStr() << endl;
+	cout << a->getName().str() << " " << b->getName().str() << " " << lca->getName().str() << endl;
 
 	if (lca == pre[a]) {	//case 1
 		BasicBlock *BB = b;
@@ -27,7 +27,7 @@ void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTre
 	} else if (lca == a) {	//case 2: capture loop dependence
 		BasicBlock *BB = b;
 		while (BB != pre[a]) {
-			cout << "\t" << a->getNameStr() << " " << BB->getNameStr() << endl;
+			cout << "\t" << a->getName().str() << " " << BB->getName().str() << endl;
 			addControlDependence(a, BB);
 			BB = pre[BB];
 		}
@@ -46,7 +46,7 @@ void DSWP::buildPDG(Loop *L) {
 			//standardlize the name for all expr
 			if (util.hasNewDef(inst)) {
 				inst->setName(util.genId());
-				dname[inst] = inst->getNameStr();
+				dname[inst] = inst->getName().str();
 			} else {
 				dname[inst] = util.genId();
 			}
@@ -108,7 +108,7 @@ void DSWP::buildPDG(Loop *L) {
 	 * begin control dependence
 	 */
 	PostDominatorTree &pdt = getAnalysis<PostDominatorTree>();
-	//cout << pdt.getRootNode()->getBlock()->getNameStr() << endl;
+	//cout << pdt.getRootNode()->getBlock()->getName().str() << endl;
 
 	/*
 	 * alien code part 1
