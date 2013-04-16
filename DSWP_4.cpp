@@ -449,7 +449,7 @@ void DSWP::loopSplit(Loop *L) {
 	//	}
 }
 
-void DSWP::clearup(Loop *L) {
+void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 
 	/*
 	 * move the produce instruction which been inserted after the branch in front of it
@@ -480,19 +480,24 @@ void DSWP::clearup(Loop *L) {
 	}
 
 	cout << "begin to delete loop" << endl;
-	for (Loop::block_iterator bi = L->block_begin(), bi2; bi != L->block_end(); bi = bi2) {
-		bi2 = bi;
-		bi2++;
-		BasicBlock * BB = *bi;
-		for (BasicBlock::iterator ii = BB->begin(), ii2; ii != BB->end(); ii
-				= ii2) {
-			ii2 = ii;
-			ii2++;
-			Instruction *inst = ii;
-			inst->eraseFromParent();
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end(); ii != ie; ii = i_next) {
+			i_next = ii;
+			++i_next;
+			Instruction &inst = *ii;
+			inst.replaceAllUsesWith(UndefValue::get(inst.getType()));
+			inst.eraseFromParent();
 		}
+	}
+
+	// Delete the basic blocks only afterwards, so later backwards branches don't break
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+		BasicBlock *BB = *bi;
 		BB->eraseFromParent();
 	}
+
+	LPM.deleteLoopFromQueue(L);
 
 	for (int i = 0; i < MAX_THREAD; i++) {
 //		allFunc[i]->dump();
@@ -505,7 +510,7 @@ void DSWP::clearup(Loop *L) {
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
-	sccId.clear();
+	// sccId.clear(); // XXX this crashes...
 	used.clear();
 	list.clear();
 	assigned.clear();

@@ -137,7 +137,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	preLoopSplit(L);
 	loopSplit(L);
 	insertSynchronization(L);
-	clearup(L);
+	clearup(L, LPM);
 	cout << "//////////////////////////// we finsih run on a loop " << endl;
 	return true;
 }
