@@ -7,3 +7,6 @@ codegen/tests/sync_test
 *.aux
 *.log
 *.pdf
+dag
+partition
+showgraph

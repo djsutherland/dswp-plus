@@ -11,3 +11,9 @@ test-files/%.o: test-files/%.cpp
 	clang++ -O0 -c -emit-llvm $< -o $@
 test-files/%-DSWP.o: test-files/%-m2r.o DSWP.so
 	opt -load ./DSWP.so -dswp $< -o $@
+
+tidy:
+	rm -f *.o dag partition showgraph
+
+clean: tidy
+	rm -f DSWP.so
