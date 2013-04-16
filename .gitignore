@@ -1,5 +1,6 @@
 *.so
 *.o
+*.o.ll
 *.swp
 codegen/tests/test
 codegen/tests/sync_test
