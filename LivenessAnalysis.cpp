@@ -55,7 +55,7 @@ bool LivenessAnalysis::runOnFunction(Function &F) {
 			ost << "{ ";
 			for (unsigned i = 0; i < allDef.size(); i++)
 				if (val.get(i) == 1)
-					ost << allDef[i]->getNameStr() << " ";
+					ost << allDef[i]->getName().str() << " ";
 			ost << "}\n";
 		}
 		ost << "\t" << *isn << "\n\n";

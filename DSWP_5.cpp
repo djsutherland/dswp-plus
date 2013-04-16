@@ -118,16 +118,16 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		CastInst *cast;
 
 		if (u->getType()->isIntegerTy()) {
-			cast = new SExtInst(u, eleType, u->getNameStr() + "_64");
+			cast = new SExtInst(u, const_cast<Type *>(eleType), u->getName().str() + "_64");
 		}
 		else if (u->getType()->isFloatingPointTy()) {
 			if (u->getType()->isFloatTy()) {
 				error("float sucks");
 			}
-			cast = new BitCastInst(u, eleType, u->getNameStr() + "_64");
+			cast = new BitCastInst(u, const_cast<Type *>(eleType), u->getName().str() + "_64");
 		}
 		else if (u->getType()->isPointerTy()){
-			cast = new PtrToIntInst(u, eleType, u->getNameStr() + "_64");	//cast value
+			cast = new PtrToIntInst(u, const_cast<Type *>(eleType), u->getName().str() + "_64");	//cast value
 		} else {
 			error("what's the hell type");
 		}
@@ -142,7 +142,7 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		if (store == NULL) {
 			error("not true dependency!");
 		}
-		BitCastInst *cast = new BitCastInst(store->getOperand(0), Type::getInt8PtrTy(*context), u->getNameStr() + "_ptr");
+		BitCastInst *cast = new BitCastInst(store->getOperand(0), Type::getInt8PtrTy(*context), u->getName().str() + "_ptr");
 		cast->insertBefore(insPos);
 		args.push_back(cast);													//push the value											//insert call
 	} else {	//others
@@ -150,7 +150,7 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 	}
 
 	args.push_back(ConstantInt::get(Type::getInt32Ty(*context), channel));
-	CallInst *call = CallInst::Create(fun, args.begin(), args.end());		//call it
+	CallInst *call = CallInst::Create(fun, args);		//call it
 //	call->setName("p" + channel);
 	call->insertBefore(insPos);												//insert call
 }
@@ -164,22 +164,22 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 	vector<Value*> args;
 
 	args.push_back(ConstantInt::get(Type::getInt32Ty(*context), channel));
-	CallInst *call = CallInst::Create(fun, args.begin(), args.end(), "c" + itoa(channel));
+	CallInst *call = CallInst::Create(fun, args, "c" + itoa(channel));
 	call->insertBefore(v);
 
 	if (dtype == REG) {
 		CastInst *cast;
 
 		if (u->getType()->isIntegerTy()) {
-			cast = new TruncInst(call, u->getType(), call->getNameStr() + "_val");
+			cast = new TruncInst(call, u->getType(), call->getName().str() + "_val");
 		}
 		else if (u->getType()->isFloatingPointTy()) {
 			if (u->getType()->isFloatTy())
 				error("cannot deal with double");
-			cast = new BitCastInst(call, u->getType(), call->getNameStr() + "_val");	//cast value
+			cast = new BitCastInst(call, u->getType(), call->getName().str() + "_val");	//cast value
 		}
 		else if (u->getType()->isPointerTy()){
-			cast = new IntToPtrInst(call, u->getType(), call->getNameStr() + "_val");	//cast value
+			cast = new IntToPtrInst(call, u->getType(), call->getName().str() + "_val");	//cast value
 		} else {
 			error("what's the hell type");
 		}
@@ -226,7 +226,7 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 		if (!isa<LoadInst>(v)) {
 			error("not true dependency");
 		}
-		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getNameStr() + "_ptr");
+		BitCastInst *cast = new BitCastInst(call, v->getType(), call->getName().str() + "_ptr");
 		cast->insertBefore(v);
 
 		//replace the v with 'cast' in v's thread: (other thread with be dealed using dependence)

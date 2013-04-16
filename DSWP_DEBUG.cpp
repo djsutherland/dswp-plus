@@ -4,8 +4,8 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::showGraph(Loop *L) {
-	cout << "header:" << L->getHeader()->getNameStr() << endl;
-	cout << "exit:" << L->getExitBlock()->getNameStr() << endl;	//TODO check different functions related to exit
+	cout << "header:" << L->getHeader()->getName().str() << endl;
+	cout << "exit:" << L->getExitBlock()->getName().str() << endl;	//TODO check different functions related to exit
 	cout << "num of blocks:" << L->getBlocks().size() << endl;
 
 	std::string name = "showgraph";
@@ -82,7 +82,7 @@ void DSWP::showLiveInfo(Loop *L) {
 	cout << "live variable information" << endl;
 	for (int i = 0; i < livein.size(); i++) {
 		Value * val = livein[i];
-		cout << val->getNameStr() << "\t";
+		cout << val->getName().str() << "\t";
 		//val->getType()->dump();
 		//cout << endl;
 	}

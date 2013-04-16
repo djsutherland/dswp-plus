@@ -1,4 +1,4 @@
-syntax: glob
+*.so
 *.o
 *.swp
 codegen/tests/test

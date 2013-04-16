@@ -47,7 +47,7 @@ void DSWP::preLoopSplit(Loop *L) {
 	/*
 	 * prepare the function Type
 	 */
-	vector<const Type*> funArgTy;
+	vector<Type*> funArgTy;
 	PointerType* argPointTy = PointerType::get(Type::getInt8Ty(*context), 0);
 	funArgTy.push_back(argPointTy);
 	FunctionType *fType = FunctionType::get(Type::getInt8PtrTy(*context),
@@ -70,7 +70,7 @@ void DSWP::preLoopSplit(Loop *L) {
 	 * prepare the actual parameters type
 	 */
 
-	ArrayType *arrayType = ArrayType::get(eleType,
+	ArrayType *arrayType = ArrayType::get(const_cast<Type *>(eleType),
 			livein.size());
 	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
 	trueArg->insertBefore(brInst);
@@ -83,14 +83,14 @@ void DSWP::preLoopSplit(Loop *L) {
 		CastInst * castVal;
 
 		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(val, eleType, val->getName() + "_arg");
+			castVal = new SExtInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
 		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(val, eleType, val->getName() + "_arg");
+			castVal = new PtrToIntInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
 		} else if (val->getType()->isFloatingPointTy()) {
 			if (val->getType()->isFloatTy()) {
 				error("floatTypeSuck");
 			}
-			castVal = new BitCastInst(val, eleType, val->getName() + "_arg");
+			castVal = new BitCastInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
 		} else {
 			error("what's the hell of the type");
 		}
@@ -105,7 +105,7 @@ void DSWP::preLoopSplit(Loop *L) {
 		arg.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
 		arg.push_back(idx);
 		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg,
-				arg.begin(), arg.end(), "");
+				arg, "");
 		ele_addr->insertBefore(brInst);
 
 		//ele_addr->getType()->dump();
@@ -122,7 +122,7 @@ void DSWP::preLoopSplit(Loop *L) {
 
 	Function *init = module->getFunction("sync_init");
 	vector<Value *> args;
-	CallInst *callInit = CallInst::Create(init, args.begin(), args.end());
+	CallInst *callInit = CallInst::Create(init, args);
 	callInit->insertBefore(brInst);
 
 	/*
@@ -136,15 +136,14 @@ void DSWP::preLoopSplit(Loop *L) {
 				(uint64_t) i)); //tid
 		args.push_back(func); //the function pointer
 
-		PointerType * finalType = PointerType::get(eleType, 0);
+		PointerType * finalType = PointerType::get(const_cast<Type *>(eleType), 0);
 		//const Type * finalType = Type::getInt8PtrTy(*context); //debug
 
 		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
 		finalArg->insertBefore(brInst);
 
 		args.push_back(finalArg); //true arg that will be call by func
-		CallInst * callfunc = CallInst::Create(delegate, args.begin(),
-				args.end());
+		CallInst * callfunc = CallInst::Create(delegate, args);
 //		vector<Value *> targs;
 //		targs.push_back(finalArg);
 //		CallInst * callfunc = CallInst::Create(allFunc[i], targs.begin(), targs.end());
@@ -221,17 +220,17 @@ void DSWP::loopSplit(Loop *L) {
 					Instruction *dep = ei->v;
 					//relinst[dep] = true;
 					relbb.insert(dep->getParent());
-					//cout << dep->getParent()->getNameStr() << endl;
+					//cout << dep->getParent()->getName().str() << endl;
 				}
 			}
 		}
 
 //		cout << "depend block: " << relbb.size() << " " << "depend inst: " << relinst.size() << endl;
-//		cout << "header: " << header->getNameStr() << endl;
+//		cout << "header: " << header->getName().str() << endl;
 //		//check consistence of the blocks
 //		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
 //			BasicBlock *BB = *bi;
-//			cout << BB->getNameStr() << "\t";
+//			cout << BB->getName().str() << "\t";
 //		}
 //		cout << endl;
 //		//check consitence of the instructions
@@ -257,7 +256,7 @@ void DSWP::loopSplit(Loop *L) {
 		//copy the basicblock and modify the control flow
 		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
 			BasicBlock *BB = *bi;
-			BasicBlock *NBB = BasicBlock::Create(*context, BB->getNameStr()
+			BasicBlock *NBB = BasicBlock::Create(*context, BB->getName().str()
 					+ "_" + itoa(i), curFunc, newExit);
 			//BranchInst *term = BranchInst::Create(NBB, NBB);
 
@@ -310,11 +309,11 @@ void DSWP::loopSplit(Loop *L) {
 							if (oldBB == L->getExitBlock()) {
 								newBB = newExit;
 							} else if (!L->contains(oldBB)) {	//so it is a block outside the loop
-								//cout << oldBB->getNameStr() << endl;
+								//cout << oldBB->getName().str() << endl;
 								continue;
 							}
 
-							//cout << newBB->getNameStr() << endl;
+							//cout << newBB->getName().str() << endl;
 
 							while (newBB == NULL) {
 								//find the nearest post-dominator (TODO not sure it is correct)+6
@@ -325,7 +324,7 @@ void DSWP::loopSplit(Loop *L) {
 							newInst->setOperand(j, newBB);
 
 							//newInst->dump();
-							//cout << newBB->getNameStr() << endl;
+							//cout << newBB->getName().str() << endl;
 
 							//TODO check if there are two branch, one branch is not in the partition, then what the branch
 						}
@@ -352,7 +351,7 @@ void DSWP::loopSplit(Loop *L) {
 
 		Function *showPlace = module->getFunction("showPlace");
 		vector<Value *> placeArg;
-		CallInst *inHeader = CallInst::Create(showPlace, placeArg.begin(), placeArg.end());
+		CallInst *inHeader = CallInst::Create(showPlace, placeArg);
 		inHeader->insertBefore(newToHeader);
 
 		BitCastInst *castArgs = new BitCastInst(args, PointerType::get(
@@ -360,7 +359,7 @@ void DSWP::loopSplit(Loop *L) {
 		castArgs->insertBefore(newToHeader);
 
 		for (unsigned j = 0; j < livein.size(); j++) {
-			cout << livein[j]->getNameStr() << endl;
+			cout << livein[j]->getName().str() << endl;
 
 			ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
 					(uint64_t) j);
@@ -368,7 +367,7 @@ void DSWP::loopSplit(Loop *L) {
 			ele_addr->insertBefore(newToHeader);
 			LoadInst * ele_val = new LoadInst(ele_addr);
 			ele_val->setAlignment(8);
-			ele_val->setName(livein[j]->getNameStr() + "_val");
+			ele_val->setName(livein[j]->getName().str() + "_val");
 			ele_val->insertBefore(newToHeader);
 
 //			BitCastInst *addcast = new BitCastInst(ele_addr, Type::getInt8PtrTy(*context));
@@ -382,7 +381,7 @@ void DSWP::loopSplit(Loop *L) {
 			vector<Value *> showArg;
 			showArg.push_back(ele_val);
 			Function *show = module->getFunction("showValue");
-			CallInst *callShow = CallInst::Create(show, showArg.begin(), showArg.end());
+			CallInst *callShow = CallInst::Create(show, showArg);
 			callShow->insertBefore(newToHeader);
 
 			Value *val = livein[j];
@@ -445,7 +444,7 @@ void DSWP::loopSplit(Loop *L) {
 	//	vector<StoreInst *> stores;
 	//	for (set<Value *>::iterator vi = defin.begin(); vi != defin.end(); vi++) {	//TODO: is defin enough
 	//		Value *val = *vi;
-	//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getNameStr() + "_ptr", allocPos);
+	//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getName().str() + "_ptr", allocPos);
 	//		varToMem[val] = arg;
 	//	}
 }
