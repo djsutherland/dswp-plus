@@ -118,16 +118,16 @@ void DSWP::insertProduce(Instruction * u, Instruction *v, DType dtype, int chann
 		CastInst *cast;
 
 		if (u->getType()->isIntegerTy()) {
-			cast = new SExtInst(u, const_cast<Type *>(eleType), u->getName().str() + "_64");
+			cast = new SExtInst(u, eleType, u->getName().str() + "_64");
 		}
 		else if (u->getType()->isFloatingPointTy()) {
 			if (u->getType()->isFloatTy()) {
 				error("float sucks");
 			}
-			cast = new BitCastInst(u, const_cast<Type *>(eleType), u->getName().str() + "_64");
+			cast = new BitCastInst(u, eleType, u->getName().str() + "_64");
 		}
 		else if (u->getType()->isPointerTy()){
-			cast = new PtrToIntInst(u, const_cast<Type *>(eleType), u->getName().str() + "_64");	//cast value
+			cast = new PtrToIntInst(u, eleType, u->getName().str() + "_64");	//cast value
 		} else {
 			error("what's the hell type");
 		}

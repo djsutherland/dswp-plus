@@ -70,8 +70,7 @@ void DSWP::preLoopSplit(Loop *L) {
 	 * prepare the actual parameters type
 	 */
 
-	ArrayType *arrayType = ArrayType::get(const_cast<Type *>(eleType),
-			livein.size());
+	ArrayType *arrayType = ArrayType::get(eleType, livein.size());
 	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
 	trueArg->insertBefore(brInst);
 	//trueArg->setAlignment(8);
@@ -83,14 +82,14 @@ void DSWP::preLoopSplit(Loop *L) {
 		CastInst * castVal;
 
 		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
+			castVal = new SExtInst(val, eleType, val->getName() + "_arg");
 		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
+			castVal = new PtrToIntInst(val, eleType, val->getName() + "_arg");
 		} else if (val->getType()->isFloatingPointTy()) {
 			if (val->getType()->isFloatTy()) {
 				error("floatTypeSuck");
 			}
-			castVal = new BitCastInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
+			castVal = new BitCastInst(val, eleType, val->getName() + "_arg");
 		} else {
 			error("what's the hell of the type");
 		}
@@ -136,7 +135,7 @@ void DSWP::preLoopSplit(Loop *L) {
 				(uint64_t) i)); //tid
 		args.push_back(func); //the function pointer
 
-		PointerType * finalType = PointerType::get(const_cast<Type *>(eleType), 0);
+		PointerType * finalType = PointerType::get(eleType, 0);
 		//const Type * finalType = Type::getInt8PtrTy(*context); //debug
 
 		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
