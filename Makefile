@@ -12,6 +12,10 @@ Example/%.o: Example/%.c
 	clang -O0 -c -emit-llvm $< -o $@
 Example/%.o: Example/%.cpp
 	clang++ -O0 -c -emit-llvm $< -o $@
+Example/%.o.ll: Example/%.o
+	llvm-dis $< -o $@
+Example/%-m2r.o: Example/%.o
+	opt -mem2reg $< -o $@
 Example/%-DSWP.o: Example/%.o DSWP.so
 	opt -load ./DSWP.so -dswp $< -o $@
 gdb/%: Example/%.o DSWP.so
