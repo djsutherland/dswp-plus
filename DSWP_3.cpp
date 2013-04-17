@@ -83,10 +83,14 @@ void DSWP::threadPartition(Loop *L) {
 		part[i].clear();
 
 	for (int i = 0; i < sccNum; i++) {
-		if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
-			cout << "scc " << i << " assigned to  " << assigned[i] << " (that's bad)" << endl;
+		if (assigned[i] == -2) {
+			// not in the queue (eg an unconditional branch)
+			// TODO: should verify that it's okay...
+		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
+			cout << "scc " << i << " assigned to " << assigned[i] << " (bad!)" << endl;
+		} else {
+			part[assigned[i]].push_back(i);
 		}
-		part[assigned[i]].push_back(i);
 	}
 
 	for (int i = 0; i < MAX_THREAD; i++) {
