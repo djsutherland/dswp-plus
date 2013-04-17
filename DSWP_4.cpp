@@ -509,7 +509,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
-	// sccId.clear(); // XXX this crashes...
+	sccId.clear(); // XXX this crashes...
 	used.clear();
 	list.clear();
 	assigned.clear();
