@@ -57,32 +57,44 @@ void DSWP::threadPartition(Loop *L) {
 				Q.push(QNode(v, sccLatency[v]));
 			}
 			//check load balance
-			if (estLatency[i] >= averLatency) {
+			if (estLatency[i] >= averLatency && i != MAX_THREAD - 1) {
 			//	cout << estLatency[i] << endl;
 				break;
 			}
+			// TODO: think this breaks ties arbitrarily (maybe in insertion order?), while
+			// the original paper broke ties by choosing the one that results in fewest
+			// outgoing dependencies.
 		}
 	}
 	//following is impossible since every time I let it bigger that aver
+	// ^ because it doesn't divide evenly... - DJS
 //	if (!Q.empty()) {
 //		error("queue should be empty!");
 //	}
 
-	while (!Q.empty()) {
-		assigned[Q.top().u] = MAX_THREAD - 1;
-		Q.pop();
-	}
+	//// this is now done in the loop above, because this didn't continue
+	//// to add statements to the queue
+	// while (!Q.empty()) {
+	// 	assigned[Q.top().u] = MAX_THREAD - 1;
+	// 	Q.pop();
+	// }
 
 	for (int i = 0; i < MAX_THREAD; i++)
 		part[i].clear();
 
 	for (int i = 0; i < sccNum; i++) {
-	//	cout << i << "  " << assigned[i] << endl;
-		part[assigned[i]].push_back(i);
+		if (assigned[i] == -2) {
+			// not in the queue (eg an unconditional branch)
+			// TODO: should verify that it's okay...
+		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
+			cout << "scc " << i << " assigned to " << assigned[i] << " (bad!)" << endl;
+		} else {
+			part[assigned[i]].push_back(i);
+		}
 	}
 
 	for (int i = 0; i < MAX_THREAD; i++) {
-		cout << part[i].size() << endl;
+		cout << "part " << i << " size: " << part[i].size() << endl;
 	}
 }
 

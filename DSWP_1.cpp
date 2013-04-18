@@ -84,7 +84,9 @@ void DSWP::buildPDG(Loop *L) {
                   //begin register dependence
 			for (Value::use_iterator ui = ii->use_begin(); ui != ii->use_end(); ui++) {
 				if (Instruction *user = dyn_cast<Instruction>(*ui)) {
-					addEdge(inst, user, REG);
+					if (rev.count(user)) { // use is in the loop
+						addEdge(inst, user, REG);
+					}
 				}
 			}
 			//finish register dependence

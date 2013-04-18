@@ -64,7 +64,7 @@ private:
 	BasicBlock * header;
 	BasicBlock * exit;
 	LLVMContext *context;
-	const Type *eleType;
+	Type *eleType;
 	int loopCounter;
 
 	set<Function *> generated;	//all generated function that should not be run in the pass
@@ -143,7 +143,7 @@ private:
 
 	void loopSplit(Loop *L);
 
-	void clearup(Loop *L);
+	void clearup(Loop *L, LPPassManager &LPM);
 
 	//map<Value*, vector<Value*> > termMap; //map the new instruction to the old instu (terminators)
 	map<Value*, Value*> instMap[MAX_THREAD]; //map the new instruction to the old instuction

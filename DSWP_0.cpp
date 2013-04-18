@@ -44,7 +44,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 
 		//add sync_produce function
 		vector<Type *> produce_arg;
-		produce_arg.push_back(const_cast<Type *>(eleType));
+		produce_arg.push_back(eleType);
 		produce_arg.push_back(Type::getInt32Ty(*context));
 		FunctionType *produce_ft = FunctionType::get(Type::getVoidTy(*context), produce_arg, false);
 		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", module);
@@ -53,7 +53,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		//add syn_consume function
 		vector<Type *> consume_arg;
 		consume_arg.push_back(Type::getInt32Ty(*context));
-		FunctionType *consume_ft = FunctionType::get(const_cast<Type *>(eleType), consume_arg, false);
+		FunctionType *consume_ft = FunctionType::get(eleType, consume_arg, false);
 		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
 		consume->setCallingConv(CallingConv::C);
 
@@ -72,7 +72,7 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		argFunArg.push_back(Type::getInt8PtrTy(*context));
 		FunctionType * argFun = FunctionType::get(Type::getInt8PtrTy(*context), argFunArg, false);
 		PointerType * arg2 = PointerType::get(argFun, 0);
-		PointerType * arg3 = PointerType::get(const_cast<Type *>(eleType), 0);
+		PointerType * arg3 = PointerType::get(eleType, 0);
 
 		vector<Type *> delegate_arg;
 		delegate_arg.push_back(Type::getInt32Ty(*context));
@@ -137,7 +137,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	preLoopSplit(L);
 	loopSplit(L);
 	insertSynchronization(L);
-	clearup(L);
+	clearup(L, LPM);
 	cout << "//////////////////////////// we finsih run on a loop " << endl;
 	return true;
 }

@@ -70,8 +70,7 @@ void DSWP::preLoopSplit(Loop *L) {
 	 * prepare the actual parameters type
 	 */
 
-	ArrayType *arrayType = ArrayType::get(const_cast<Type *>(eleType),
-			livein.size());
+	ArrayType *arrayType = ArrayType::get(eleType, livein.size());
 	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
 	trueArg->insertBefore(brInst);
 	//trueArg->setAlignment(8);
@@ -83,14 +82,14 @@ void DSWP::preLoopSplit(Loop *L) {
 		CastInst * castVal;
 
 		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
+			castVal = new SExtInst(val, eleType, val->getName() + "_arg");
 		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
+			castVal = new PtrToIntInst(val, eleType, val->getName() + "_arg");
 		} else if (val->getType()->isFloatingPointTy()) {
 			if (val->getType()->isFloatTy()) {
 				error("floatTypeSuck");
 			}
-			castVal = new BitCastInst(val, const_cast<Type *>(eleType), val->getName() + "_arg");
+			castVal = new BitCastInst(val, eleType, val->getName() + "_arg");
 		} else {
 			error("what's the hell of the type");
 		}
@@ -136,7 +135,7 @@ void DSWP::preLoopSplit(Loop *L) {
 				(uint64_t) i)); //tid
 		args.push_back(func); //the function pointer
 
-		PointerType * finalType = PointerType::get(const_cast<Type *>(eleType), 0);
+		PointerType * finalType = PointerType::get(eleType, 0);
 		//const Type * finalType = Type::getInt8PtrTy(*context); //debug
 
 		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
@@ -449,7 +448,7 @@ void DSWP::loopSplit(Loop *L) {
 	//	}
 }
 
-void DSWP::clearup(Loop *L) {
+void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 
 	/*
 	 * move the produce instruction which been inserted after the branch in front of it
@@ -480,19 +479,24 @@ void DSWP::clearup(Loop *L) {
 	}
 
 	cout << "begin to delete loop" << endl;
-	for (Loop::block_iterator bi = L->block_begin(), bi2; bi != L->block_end(); bi = bi2) {
-		bi2 = bi;
-		bi2++;
-		BasicBlock * BB = *bi;
-		for (BasicBlock::iterator ii = BB->begin(), ii2; ii != BB->end(); ii
-				= ii2) {
-			ii2 = ii;
-			ii2++;
-			Instruction *inst = ii;
-			inst->eraseFromParent();
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end(); ii != ie; ii = i_next) {
+			i_next = ii;
+			++i_next;
+			Instruction &inst = *ii;
+			inst.replaceAllUsesWith(UndefValue::get(inst.getType()));
+			inst.eraseFromParent();
 		}
+	}
+
+	// Delete the basic blocks only afterwards, so later backwards branches don't break
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+		BasicBlock *BB = *bi;
 		BB->eraseFromParent();
 	}
+
+	LPM.deleteLoopFromQueue(L);
 
 	for (int i = 0; i < MAX_THREAD; i++) {
 //		allFunc[i]->dump();
@@ -505,7 +509,7 @@ void DSWP::clearup(Loop *L) {
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
-	sccId.clear();
+	sccId.clear(); // XXX this crashes...
 	used.clear();
 	list.clear();
 	assigned.clear();
