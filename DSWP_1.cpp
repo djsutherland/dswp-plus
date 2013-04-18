@@ -36,6 +36,16 @@ void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTre
 	}
 }
 
+void DSWP::dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
+					std::vector<BasicBlock *> &ord) {
+	vis.insert(BB); //Mark as visited
+	for (succ_iterator SI = succ_begin(BB), E = succ_end(BB); SI != E; ++SI)
+		if (vis.find(*SI) != vis.end())
+			dfsVisit(*SI, vis, ord);
+
+	ord.push_back(BB);
+}
+
 void DSWP::buildPDG(Loop *L) {
     //Initialize PDG
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
@@ -70,7 +80,8 @@ void DSWP::buildPDG(Loop *L) {
 
 			//data dependence = register dependence + memory dependence
 
-			//begin register dependence
+			
+                  //begin register dependence
 			for (Value::use_iterator ui = ii->use_begin(); ui != ii->use_end(); ui++) {
 				if (Instruction *user = dyn_cast<Instruction>(*ui)) {
 					addEdge(inst, user, REG);
@@ -86,23 +97,145 @@ void DSWP::buildPDG(Loop *L) {
 				Instruction *dep = mdr.getInst();
 
 				if (isa<LoadInst>(inst)) {
-					if (isa<StoreInst>(dep)) {
-						addEdge(dep, inst, DTRUE);	//READ AFTER WRITE
-					}
+					//READ AFTER WRITE
+					if (isa<StoreInst>(dep))
+						addEdge(dep, inst, DTRUE);
+					//READ AFTER ALLOCATE
+					if (isa<AllocaInst>(dep))
+						addEdge(dep, inst, DTRUE);
 				}
 				if (isa<StoreInst>(inst)) {
-					if (isa<LoadInst>(dep)) {
-						addEdge(dep, inst, DANTI);	//WRITE AFTER READ
-					}
-					if (isa<StoreInst>(dep)) {
-						addEdge(dep, inst, DOUT);	//WRITE AFTER WRITE
-					}
+					//WRITE AFTER READ
+					if (isa<LoadInst>(dep))
+						addEdge(dep, inst, DANTI);
+					//WRITE AFTER WRITE
+					if (isa<StoreInst>(dep))
+						addEdge(dep, inst, DOUT);
+					//WRITE AFTER ALLOCATE
+					if (isa<AllocaInst>(dep))
+						addEdge(dep, inst, DOUT);
 				}
 				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
 			//end memory dependence
 		}//for ii
 	}//for bi
+
+
+	/* 
+	 *
+	 * Topologically sort block sand create peeled loop
+	 *
+	 */
+
+	Function *ctrlfunc = Function::Create();
+
+	std::set<BasicBlock *> b_visited;
+	std::vector<BasicBlock *> bb_ordered;
+
+	// DFS to (reverse) topologically sort the basic blocks
+	for (Loop::block_iterator bi = L->getBlocks().begin();
+			bi != L->getBlocks().end; bi++) {
+		BasicBlock *BB = *bi;
+		if (b_visited.find(BB) != b_visited.end()) //Not visited 
+			dfsVisit(BB, b_visited, bb_ordered, tovisit);
+	}
+
+	std::map<BasicBlock *, <BasicBlock *, BsicBlock *> > realtodummy;
+	std::map<BasicBlock *, BasicBlock *> dummytoreal;
+	std::map<BasicBlock *, unsigned int> instnum;
+
+	//Create dummy basic blocks and populate lookup tables
+	if (!bb_ordered.empty()) {
+		std::vector<BasicBlock *>::iterator it = bb_ordered.end();
+		unsigned int i = 0;
+		do {
+			--it;
+			//Dummy block for first iteration
+			BasicBlock *newbb = BasicBlock::Create(getGlobalContext(),
+												   "", ctrlfunc, 0); 
+			//Dummy block for second iteration
+			BasicBlock *newbb2 = BasicBlock::Create(getGlobalContext(),
+												   "", ctrlfunc, 0); 
+
+			//Update lookup tables
+			realtodummy[*it] = std::make_pair(newbb, newbb2);
+			dummytoreal[newbb] = *it;
+			dummytoreal[newbb2] = *it;
+			instnum[*it] = i;
+			i++;
+		} while (it != bb_ordered.begin());
+	}
+
+	//Add branch instructions for dummy blocks
+	if (!bb_ordered.empty()) {
+		std::vector<BasicBlock *>::iterator it = bb_ordered.end();
+		do {
+			--it;
+			std::pair<BasicBlock *, BasicBlock *> dummypair = realtodummy[*it];
+			BasicBlock *bbdummy1 = dummypair.first; 
+			BasicBlock *bbdummy2 = dummypair.second;
+			IRBuilder<> builder1(*bbdummy1);
+			IRBuilder<> builder2(*bbdummy2);
+
+			TerminatorInst *tinst = (*it)->getTerminator();
+			unsigned nsucc = tinst->getNumSuccessors();
+			SwitchInst *SI1, *SI2;
+			bool swcreated1 = false, swcreated2 = false; 
+			for (unsigned i = 0; i < nsucc; i++) {
+				BasicBlock *bsucc = tinst->getSuccessor(i);
+
+				if (L.contains(bsucc)) { //successor is still inside loop?
+					BasicBlock *destblock1;
+
+					if (instnum[bsucc] < instnum[*it]) //points to earlier block
+						destblock1 = realtodummy[bsucc].second;
+					else //points to a latter block
+					{
+						destblock1 = realtodummy[bsucc].first;
+						BasicBlock *destblock2 = realtodummy[bsucc].second;
+
+						//Now, deal with instruction for bottom half
+						if (!swcreated2) { //need to create switch instr. for bottom half
+							SI2 = builder2.CreateSwitch(ConstantInt.get(
+									Type::getInt64Ty(getGlobalContext()), 0),
+									destblock2, nsucc);
+							swcreated2 = true;
+						}
+
+						//Add a case to the switch instruction for the bottom half
+						SI2->addCase(ConstantInt.get(
+								Type::getInt64Ty(getGlobalContext()), i),
+								destblock2);
+					}
+
+					if (!swcreated1) { //need to create switch instruction for top half
+						SI1 = builder1.CreateSwitch(ConstantInt.get(
+								Type::getInt64Ty(getGlobalContext()), 0),
+						        destblock1, nsucc);
+						swcreated1 = true;
+					}
+
+					//Add a case to the switch instruction for the top half
+					SI1->addCase(ConstantInt.get(
+							Type::getInt64Ty(getGlobalContext()), i),
+							destblock1);
+				}
+			}
+		} while (it != bb_ordered.begin());
+	}
+
+	/*
+	 *
+	 * Begin control dependence calculation
+	 *
+	 */
+
+	PostDominatorTree &pdt = getAnalysis<PostDominatorTree>(ctrlfunc);
+
+
+
+
 
 	/*
 	 * begin control dependence
