@@ -84,9 +84,7 @@ void DSWP::buildPDG(Loop *L) {
                   //begin register dependence
 			for (Value::use_iterator ui = ii->use_begin(); ui != ii->use_end(); ui++) {
 				if (Instruction *user = dyn_cast<Instruction>(*ui)) {
-					if (rev.count(user)) { // use is in the loop
-						addEdge(inst, user, REG);
-					}
+					addEdge(inst, user, REG);
 				}
 			}
 			//finish register dependence
@@ -126,7 +124,7 @@ void DSWP::buildPDG(Loop *L) {
 
 	/* 
 	 *
-	 * Topologically sort block sand create peeled loop
+	 * Topologically sort blocks and create peeled loop
 	 *
 	 */
 
@@ -134,6 +132,7 @@ void DSWP::buildPDG(Loop *L) {
 
 	std::set<BasicBlock *> b_visited;
 	std::vector<BasicBlock *> bb_ordered;
+	std::vector<BasicBlock *> dummylist;
 
 	// DFS to (reverse) topologically sort the basic blocks
 	for (Loop::block_iterator bi = L->getBlocks().begin();
@@ -143,7 +142,7 @@ void DSWP::buildPDG(Loop *L) {
 			dfsVisit(BB, b_visited, bb_ordered, tovisit);
 	}
 
-	std::map<BasicBlock *, <BasicBlock *, BsicBlock *> > realtodummy;
+	std::map<BasicBlock *, <BasicBlock *, BasicBlock *> > realtodummy;
 	std::map<BasicBlock *, BasicBlock *> dummytoreal;
 	std::map<BasicBlock *, unsigned int> instnum;
 
@@ -159,6 +158,9 @@ void DSWP::buildPDG(Loop *L) {
 			//Dummy block for second iteration
 			BasicBlock *newbb2 = BasicBlock::Create(getGlobalContext(),
 												   "", ctrlfunc, 0); 
+
+			dummylist.push_back(newbb);
+			dummylist.push_back(newbb2);
 
 			//Update lookup tables
 			realtodummy[*it] = std::make_pair(newbb, newbb2);
@@ -189,27 +191,12 @@ void DSWP::buildPDG(Loop *L) {
 
 				if (L.contains(bsucc)) { //successor is still inside loop?
 					BasicBlock *destblock1;
+					BasicBlock *destblock2 = realtodummy[bsucc].second;
 
 					if (instnum[bsucc] < instnum[*it]) //points to earlier block
 						destblock1 = realtodummy[bsucc].second;
 					else //points to a latter block
-					{
 						destblock1 = realtodummy[bsucc].first;
-						BasicBlock *destblock2 = realtodummy[bsucc].second;
-
-						//Now, deal with instruction for bottom half
-						if (!swcreated2) { //need to create switch instr. for bottom half
-							SI2 = builder2.CreateSwitch(ConstantInt.get(
-									Type::getInt64Ty(getGlobalContext()), 0),
-									destblock2, nsucc);
-							swcreated2 = true;
-						}
-
-						//Add a case to the switch instruction for the bottom half
-						SI2->addCase(ConstantInt.get(
-								Type::getInt64Ty(getGlobalContext()), i),
-								destblock2);
-					}
 
 					if (!swcreated1) { //need to create switch instruction for top half
 						SI1 = builder1.CreateSwitch(ConstantInt.get(
@@ -222,6 +209,20 @@ void DSWP::buildPDG(Loop *L) {
 					SI1->addCase(ConstantInt.get(
 							Type::getInt64Ty(getGlobalContext()), i),
 							destblock1);
+
+					//Now, deal with instruction for bottom half
+					if (!swcreated2) { //need to create switch instr. for bottom half
+						SI2 = builder2.CreateSwitch(ConstantInt.get(
+								Type::getInt64Ty(getGlobalContext()), 0),
+								destblock2, nsucc);
+						swcreated2 = true;
+					}
+
+					//Add a case to the switch instruction for the bottom half
+					SI2->addCase(ConstantInt.get(
+							Type::getInt64Ty(getGlobalContext()), i),
+							destblock2);
+
 				}
 			}
 		} while (it != bb_ordered.begin());
@@ -235,8 +236,34 @@ void DSWP::buildPDG(Loop *L) {
 
 	PostDominatorTree &pdt = getAnalysis<PostDominatorTree>(ctrlfunc);
 
+	for (std::vector<BasicBlock *>::iterator it = dummylist.begin();
+		 it != dummylist.end(); ++it)
+	{
+		TerminatorInst *tinst = (*it)->getTerminator();
+		unsigned nsucc = tinst->getNumSuccessors(); 
 
+		for (unsigned i = 0; i < nsucc; i++) {
+			BasicBlock *bsucc = tinst->getSuccessor(i);
 
+			//Find LCA of two nodes in the post-dominator tree
+			DomTreeNode *succnode = pdt.getNode(bsucc);
+			BasicBlock *realblock = dummytoreal[*it];
+			DomTreeNode *dn = pdt.findNearestCommonDenominator(pdt.getNode(*it),
+															   succnode);
+			//WHAT IF dn IS NULL?
+
+			//As long as the current node is not a post-dominator for *it, add a control
+			//dependence edge and move upward in the post-dominator tree
+			while (succnode != dn)
+			{
+				BasicBlock *depblock = succnode->getBlock();
+				if (realblock != dummytoreal[depblock]) 
+					addEdge(realblock->getTerminator(), depblock->begin(), CONTROL);
+
+				succnode = succnode->getIDom();
+			}
+		}
+	}
 
 
 	/*
@@ -294,7 +321,7 @@ void DSWP::buildPDG(Loop *L) {
 //				addEdge(pre, inst, CONTROL);
 //			}
 //			pre = inst;
-//		}
+/Node//		}
 //	}
 
 //	//the special kind of dependence need loop peeling ? I don't know whether this is needed
