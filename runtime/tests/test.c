@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
 #include "queue.h"
 
 static queue_t *q;
@@ -43,18 +44,18 @@ int main(int argc, char *argv[]) {
 
   q = (queue_t *)malloc(sizeof(queue_t));
 
-  printf("Initialize queue...");
+  printf("Initialize queue...\n");
   queue_init(q);
-  printf("Done.\n");
-  
-  printf("Creating producers and consumers...");
+  printf("Done.\n\n");
+
+  printf("Creating producers and consumers...\n");
   for (i = 0; i < 10; i++) {
     pthread_create(&producers[i], NULL, produce, NULL);
     pthread_create(&consumers[i], NULL, consume, NULL);
   }
-  printf("Done.\n");
+  printf("Done.\n\n");
 
-  printf("Checking answers...");
+  printf("Waiting for answers and checking...\n");
   unsigned int ret_val;
   for (i = 0; i < 10; i++) {
     pthread_join(producers[i], NULL);
@@ -63,7 +64,7 @@ int main(int argc, char *argv[]) {
       printf("ERROR: values mismatched: %u\n", ret_val);
     }
   }
-  printf("Done.\n");
+  printf("Done.\n\n");
 
   printf("Checking blocking functionality...\n");
   pthread_create(&consumers[0], NULL, block_consume, NULL);
@@ -73,7 +74,7 @@ int main(int argc, char *argv[]) {
   if (ret_val != 42) {
     printf("ERROR: value mismatched: %u\n", ret_val);
   }
-  
+
   pthread_create(&producers[0], NULL, block_produce, NULL);
   printf("Sleeping: producer shouldn't finish during this time.\n");
   sleep(2);

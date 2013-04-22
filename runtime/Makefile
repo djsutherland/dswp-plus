@@ -1,23 +1,17 @@
-simple_sync: queue.o simple_sync.o
+CFLAGS += -pthread -I.
+LDFLAGS += -pthread
+
+.PHONY: all tidy clean
+
+all: queue.o simple_sync.o
 	@
 
-tests: queue.o test.o simple_sync.o sync_test.o
-	llvm-gcc -pthread -I . -emit-llvm queue.o tests/test.o -o tests/test
-	llvm-gcc -pthread -I . -emit-llvm queue.o simple_sync.o tests/sync_test.o -o tests/sync_test
+tests/test: tests/test.o queue.o
 
-sync_test.o:
-	llvm-gcc -pthread -c -I . -emit-llvm tests/sync_test.c -o tests/sync_test.o
+tests/sync_test: tests/sync_test.o queue.o simple_sync.o
 
-simple_sync.o:
-	llvm-gcc -pthread -c -I . -emit-llvm  simple_sync.c -o simple_sync.o
+tidy:
+	rm -f *.o tests/*.o
 
-queue.o:
-	llvm-gcc -pthread -c -I . -emit-llvm queue.c -o queue.o
-
-test.o:
-	llvm-gcc -pthread -c -I . -emit-llvm tests/test.c -o tests/test.o
-
-clean:
-	rm *.o
-	rm tests/*.o
-	rm tests/test
+clean: tidy
+	rm -f tests/test tests/sync_test

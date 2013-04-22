@@ -3,9 +3,8 @@
 #include "queue.h"
 #include "simple_sync.h"
 
-static pthread_t threads[NUM_THREADS];
-static queue_t data_queues[NUM_QUEUES];
-
+static pthread_t threads[NUM_THREADS] = {};
+static queue_t data_queues[NUM_QUEUES] = {};
 
 
 void sync_produce(unsigned long long elem, int val_id) {
@@ -33,7 +32,9 @@ void sync_join() {
 	printf("join\n");
 	int i;
 	for (i = 0; i < NUM_THREADS; i++) {
-		pthread_join(threads[i], NULL);
+		if (threads[i]) {
+			pthread_join(threads[i], NULL);
+		}
 	}
 }
 

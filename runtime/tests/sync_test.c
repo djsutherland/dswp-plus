@@ -12,7 +12,7 @@ void *test_delegate(void *fake_args) {
 
 int main() {
   unsigned long long args[] = {42, 43, 44};
-  sync_delegate(0, test_delegate, (void *)args);
+  sync_delegate(0, test_delegate, args);
   sync_join();
   return 0;
 }
