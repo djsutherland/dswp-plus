@@ -5,8 +5,7 @@ CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
 all: DSWP.so
 
 DSWP.so: DSWP_0.o DSWP_1.o DSWP_2.o DSWP_3.o DSWP_4.o DSWP_5.o DSWP_DEBUG.o \
-	     DSWP_PRE.o DFAFramework.o DFAValue.o LivenessAnalysis.o Utils.o \
-	     raw_os_ostream.o
+	     DFAFramework.o DFAValue.o LivenessAnalysis.o Utils.o raw_os_ostream.o
 	$(CXX) -dylib -flat_namespace -shared -g -O0  $^ -o $@
 # We're including raw_os_ostream.o because we can't just link in libLLVMSupport:
 # http://lists.cs.uiuc.edu/pipermail/llvmdev/2010-June/032508.html
