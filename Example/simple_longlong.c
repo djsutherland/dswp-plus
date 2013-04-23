@@ -1,4 +1,3 @@
-
 long long fun(long long a) {
 	long long i, res;
 	res = 0;
@@ -6,4 +5,12 @@ long long fun(long long a) {
 		res = res + i;
 	}
 	return res;
+}
+
+int main() {
+    int res;
+    //printf("program start\n");
+    res = fun(100000);
+    //printf("program end\n");
+    return 0;
 }

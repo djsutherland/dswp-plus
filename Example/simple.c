@@ -1,14 +1,13 @@
-#include "stdio.h"
-#include <pthread.h>
+#include <stdio.h>
 
 int fun(int a) {
 	//printf("%d\n", a);
 	//getchar();
-	
+
 	int i = 0, res = 200, res2 = 0, j;
 	//res = 0;
 	//printf("begin loop\n");
-	for (i = 0; i < a; i++) {		
+	for (i = 0; i < a; i++) {
 		//printf("%d\n", i);
 		res = res + i;
 		//res2 = res2 + i * 2;
@@ -17,11 +16,11 @@ int fun(int a) {
 		//break;
 	}
 	printf("%d %d\n", res, res2);
-	
+
 	return res;
 }
 
-int main() {	
+int main() {
 	int res;
 	//printf("program start\n");
 	res = fun(100000);
