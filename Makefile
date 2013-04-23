@@ -1,5 +1,6 @@
 CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
-.PHONY: all runtime/libruntime.a gdb/% valgrind/% tidy clean clean-examples
+.PHONY: all runtime/libruntime.a gdb/% valgrind/% time/% \
+		tidy clean clean-examples
 
 all: DSWP.so
 
@@ -28,6 +29,9 @@ Example/%-DSWP.out: Example/%-DSWP.bc runtime/libruntime.a
 	clang -pthread $< runtime/libruntime.a -o $@
 Example/%.out: Example/%.bc
 	clang -O0 $< -o $@
+
+time/%: Example/%.out
+	time $<
 
 gdb/%: Example/%.bc DSWP.so
 	gdb --args opt -load ./DSWP.so -dswp $< -o /dev/null
