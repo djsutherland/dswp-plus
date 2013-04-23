@@ -4,6 +4,7 @@
 *.o.ll
 *.bc
 *.bc.ll
+*.out
 
 dag
 partition

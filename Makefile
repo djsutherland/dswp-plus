@@ -1,30 +1,46 @@
 CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
-.PHONY: all gdb/% valgrind/% tidy clean
+.PHONY: all runtime/libruntime.a gdb/% valgrind/% tidy clean clean-examples
 
 all: DSWP.so
 
-DSWP.so: DSWP_0.o DSWP_1.o DSWP_2.o DSWP_3.o DSWP_4.o DSWP_5.o DSWP_DEBUG.o DSWP_PRE.o DFAFramework.o DFAValue.o LivenessAnalysis.o Utils.o raw_os_ostream.o
+DSWP.so: DSWP_0.o DSWP_1.o DSWP_2.o DSWP_3.o DSWP_4.o DSWP_5.o DSWP_DEBUG.o \
+	     DSWP_PRE.o DFAFramework.o DFAValue.o LivenessAnalysis.o Utils.o \
+	     raw_os_ostream.o
 	$(CXX) -dylib -flat_namespace -shared -g -O0  $^ -o $@
 # We're including raw_os_ostream.o because we can't just link in libLLVMSupport:
 # http://lists.cs.uiuc.edu/pipermail/llvmdev/2010-June/032508.html
 
-Example/%.o: Example/%.c
+runtime/libruntime.a:
+	$(MAKE) -C runtime libruntime.a
+
+Example/%.bc: Example/%.c
 	clang -O0 -c -emit-llvm $< -o $@
-Example/%.o: Example/%.cpp
+Example/%.bc: Example/%.cpp
 	clang++ -O0 -c -emit-llvm $< -o $@
-Example/%.o.ll: Example/%.o
+Example/%.bc.ll: Example/%.bc
 	llvm-dis $< -o $@
-Example/%-m2r.o: Example/%.o
+Example/%-m2r.bc: Example/%.bc
 	opt -mem2reg $< -o $@
-Example/%-DSWP.o: Example/%.o DSWP.so
+Example/%-DSWP.bc: Example/%.bc DSWP.so
 	opt -load ./DSWP.so -dswp $< -o $@
-gdb/%: Example/%.o DSWP.so
+
+Example/%-DSWP.out: Example/%-DSWP.bc runtime/libruntime.a
+	clang -pthread $< runtime/libruntime.a -o $@
+Example/%.out: Example/%.bc
+	clang -O0 $< -o $@
+
+gdb/%: Example/%.bc DSWP.so
 	gdb --args opt -load ./DSWP.so -dswp $< -o /dev/null
-valgrind/%: Example/%.o DSWP.so
+valgrind/%: Example/%.bc DSWP.so
 	valgrind $(VALGRIND_ARGS) opt -load ./DSWP.so -dswp $< -o /dev/null
 
 tidy:
 	rm -f *.o dag partition showgraph
+	$(MAKE) -C runtime tidy
 
-clean: tidy
+clean-examples:
+	rm -f Example/*.bc Example/*.bc.ll Example/*.out
+
+clean: tidy clean-examples
 	rm -f DSWP.so
+	$(MAKE) -C runtime clean
