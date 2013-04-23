@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "runtime_debug.h"
 
 void showPlace() {
@@ -5,7 +6,7 @@ void showPlace() {
 }
 
 void showPtr(void *elem) {
-	printf("show pointer: %d\n", elem);
+	printf("show pointer: %p\n", elem);
 }
 
 void showValue(unsigned long long elem) {

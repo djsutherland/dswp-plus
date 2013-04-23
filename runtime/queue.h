@@ -1,5 +1,5 @@
 /*
- * A thread-safe FIFO queue implementation with a fixed-length circular buffer 
+ * A thread-safe FIFO queue implementation with a fixed-length circular buffer
  * for the queue.
  */
 #ifndef QUEUE_H
@@ -23,13 +23,13 @@ void queue_init(queue_t *q);
 void queue_destroy(queue_t *q);
 
 /*
- * Pushes the specified element onto the end of the queue.  Blocks if the queue 
+ * Pushes the specified element onto the end of the queue.  Blocks if the queue
  * is full.
  */
 void queue_push(queue_t *q, unsigned long long elem);
 
 /*
- * Pops the next element off the head of the queue.  Blocks if the queue is 
+ * Pops the next element off the head of the queue.  Blocks if the queue is
  * empty.
  */
 unsigned long long queue_pop(queue_t *q);

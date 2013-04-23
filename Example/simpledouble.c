@@ -1,4 +1,3 @@
-
 double fun(double a) {
 	int i;
 	double res;
@@ -8,4 +7,12 @@ double fun(double a) {
 		res = res + x;
 	}
 	return res;
+}
+
+int main() {
+    int res;
+    //printf("program start\n");
+    res = fun(100000);
+    //printf("program end\n");
+    return 0;
 }

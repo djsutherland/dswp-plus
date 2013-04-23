@@ -1,12 +1,11 @@
 *.so
+*.a
 *.o
 *.o.ll
-*.swp
-codegen/tests/test
-codegen/tests/sync_test
-*.aux
-*.log
-*.pdf
+*.bc
+*.bc.ll
+*.out
+
 dag
 partition
 showgraph
