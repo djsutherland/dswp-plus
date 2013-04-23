@@ -84,7 +84,7 @@ void DSWP::buildPDG(Loop *L) {
 			//begin register dependence
 			for (Value::use_iterator ui = ii->use_begin(); ui != ii->use_end(); ui++) {
 				if (Instruction *user = dyn_cast<Instruction>(*ui)) {
-					if (rev.count(user)) {
+					if (L.contains(user)) {
 						addEdge(inst, user, REG);
 					}
 				}
