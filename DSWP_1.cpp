@@ -71,7 +71,7 @@ void DSWP::buildPDG(Loop *L) {
 	/*
 	 * Memory dependency analysis
 	 */
-	MemoryDependenceAnalysis &mda = getAnalysis<MemoryDependenceAnalysis>();
+	MemoryDependenceAnalysis &mda = Pass::getAnalysis<MemoryDependenceAnalysis>();
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
@@ -84,7 +84,7 @@ void DSWP::buildPDG(Loop *L) {
 			//begin register dependence
 			for (Value::use_iterator ui = ii->use_begin(); ui != ii->use_end(); ui++) {
 				if (Instruction *user = dyn_cast<Instruction>(*ui)) {
-					if (L.contains(user)) {
+					if (L->contains(user)) {
 						addEdge(inst, user, REG);
 					}
 				}
@@ -130,21 +130,28 @@ void DSWP::buildPDG(Loop *L) {
 	 *
 	 */
 
-	Function *ctrlfunc = Function::Create();
+	BasicBlock *curheader = L->getHeader();
+	Function *curfunc = header->getParent();
+	Module *curmodule = curfunc->getParent();
+	LLVMContext *curcontext = &curmodule->getContext();
+	FunctionType *functype = FunctionType::get(Type::getVoidTy(*curcontext), false); 
+	Function *ctrlfunc = Function::Create(functype, Function::ExternalLinkage,
+										  "dummyloopunroll", module);
+	Function &ctrlfuncref = *ctrlfunc;
 
 	std::set<BasicBlock *> b_visited;
 	std::vector<BasicBlock *> bb_ordered;
 	std::vector<BasicBlock *> dummylist;
 
 	// DFS to (reverse) topologically sort the basic blocks
-	for (Loop::block_iterator bi = L->getBlocks().begin();
-			bi != L->getBlocks().end; bi++) {
+	for (Loop::block_iterator bi = L->getBlocks().begin(),
+					be = L->getBlocks().end(); bi != be; bi++) {
 		BasicBlock *BB = *bi;
 		if (b_visited.find(BB) != b_visited.end()) //Not visited 
-			dfsVisit(BB, b_visited, bb_ordered, tovisit);
+			dfsVisit(BB, b_visited, bb_ordered);
 	}
 
-	std::map<BasicBlock *, <BasicBlock *, BasicBlock *> > realtodummy;
+	std::map<BasicBlock *, std::pair<BasicBlock *, BasicBlock *> > realtodummy;
 	std::map<BasicBlock *, BasicBlock *> dummytoreal;
 	std::map<BasicBlock *, unsigned int> instnum;
 
@@ -181,8 +188,8 @@ void DSWP::buildPDG(Loop *L) {
 			std::pair<BasicBlock *, BasicBlock *> dummypair = realtodummy[*it];
 			BasicBlock *bbdummy1 = dummypair.first; 
 			BasicBlock *bbdummy2 = dummypair.second;
-			IRBuilder<> builder1(*bbdummy1);
-			IRBuilder<> builder2(*bbdummy2);
+			IRBuilder<> builder1(bbdummy1);
+			IRBuilder<> builder2(bbdummy2);
 
 			TerminatorInst *tinst = (*it)->getTerminator();
 			unsigned nsucc = tinst->getNumSuccessors();
@@ -191,7 +198,7 @@ void DSWP::buildPDG(Loop *L) {
 			for (unsigned i = 0; i < nsucc; i++) {
 				BasicBlock *bsucc = tinst->getSuccessor(i);
 
-				if (L.contains(bsucc)) { //successor is still inside loop?
+				if (L->contains(bsucc)) { //successor is still inside loop?
 					BasicBlock *destblock1;
 					BasicBlock *destblock2 = realtodummy[bsucc].second;
 
@@ -201,27 +208,27 @@ void DSWP::buildPDG(Loop *L) {
 						destblock1 = realtodummy[bsucc].first;
 
 					if (!swcreated1) { //need to create switch instruction for top half
-						SI1 = builder1.CreateSwitch(ConstantInt.get(
+						SI1 = builder1.CreateSwitch(ConstantInt::get(
 								Type::getInt64Ty(getGlobalContext()), 0),
 						        destblock1, nsucc);
 						swcreated1 = true;
 					}
 
 					//Add a case to the switch instruction for the top half
-					SI1->addCase(ConstantInt.get(
+					SI1->addCase(ConstantInt::get(
 							Type::getInt64Ty(getGlobalContext()), i),
 							destblock1);
 
 					//Now, deal with instruction for bottom half
 					if (!swcreated2) { //need to create switch instr. for bottom half
-						SI2 = builder2.CreateSwitch(ConstantInt.get(
+						SI2 = builder2.CreateSwitch(ConstantInt::get(
 								Type::getInt64Ty(getGlobalContext()), 0),
 								destblock2, nsucc);
 						swcreated2 = true;
 					}
 
 					//Add a case to the switch instruction for the bottom half
-					SI2->addCase(ConstantInt.get(
+					SI2->addCase(ConstantInt::get(
 							Type::getInt64Ty(getGlobalContext()), i),
 							destblock2);
 
@@ -236,7 +243,7 @@ void DSWP::buildPDG(Loop *L) {
 	 *
 	 */
 
-	PostDominatorTree &pdt = getAnalysis<PostDominatorTree>(ctrlfunc);
+	PostDominatorTree &pdt = Pass::getAnalysis<PostDominatorTree>(ctrlfuncref);
 
 	for (std::vector<BasicBlock *>::iterator it = dummylist.begin();
 		 it != dummylist.end(); ++it)
@@ -250,8 +257,8 @@ void DSWP::buildPDG(Loop *L) {
 			//Find LCA of two nodes in the post-dominator tree
 			DomTreeNode *succnode = pdt.getNode(bsucc);
 			BasicBlock *realblock = dummytoreal[*it];
-			DomTreeNode *dn = pdt.findNearestCommonDenominator(pdt.getNode(*it),
-															   succnode);
+			DomTreeNode *dn = pdt.getNode(pdt.findNearestCommonDominator(*it, bsucc));
+
 			//WHAT IF dn IS NULL?
 
 			//As long as the current node is not a post-dominator for *it, add a control

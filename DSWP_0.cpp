@@ -128,7 +128,6 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	buildPDG(L);
 	showGraph(L);
 	findSCC(L);
-	buildDAG(L);
 	showDAG(L);
 	threadPartition(L);
 	showPartition(L);

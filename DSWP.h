@@ -83,12 +83,15 @@ private:
 
 	void addControlDependence(BasicBlock *a, BasicBlock *b);
 
+	void dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
+						std::vector<BasicBlock *> &ord);
+
 	//part 2: scc and dag
 	void findSCC(Loop *L);
 
 	void dfs_forward(Instruction *inst);
 
-	void dfs2_reverse(Instruction *inst);
+	void dfs_reverse(Instruction *inst);
 
 	//program dependence graph
 	map<Instruction *, vector<Edge> *> pdg;
@@ -97,7 +100,7 @@ private:
 	//dag
 	map<int, vector<int> *> dag;
 	//edge lookup for SCC dag
-	map< <int, int>, bool> dag_added;
+	map<std::pair<int, int>, bool> dag_added;
 	//edge table, all the dependency relationship
 	vector<Edge> allEdges;
 
