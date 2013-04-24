@@ -86,11 +86,9 @@ private:
 	//part 2: scc and dag
 	void findSCC(Loop *L);
 
-	void buildDAG(Loop *L);
+	void dfs_forward(Instruction *inst);
 
-	void dfs1(Instruction *inst);
-
-	void dfs2(Instruction *inst);
+	void dfs2_reverse(Instruction *inst);
 
 	//program dependence graph
 	map<Instruction *, vector<Edge> *> pdg;
@@ -98,6 +96,8 @@ private:
 	map<Instruction *, vector<Edge> *> rev;
 	//dag
 	map<int, vector<int> *> dag;
+	//edge lookup for SCC dag
+	map< <int, int>, bool> dag_added;
 	//edge table, all the dependency relationship
 	vector<Edge> allEdges;
 
