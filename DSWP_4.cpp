@@ -6,7 +6,9 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::preLoopSplit(Loop *L) {
+	// Makes the loop-replacement block that calls the worker threads.
 	allFunc.clear();
+
 
 	/*
 	 * Insert a new block to replace the old loop
@@ -48,6 +50,7 @@ void DSWP::preLoopSplit(Loop *L) {
 		}
 	}
 
+
 	/*
 	 * add functions for the worker threads
 	 */
@@ -72,13 +75,14 @@ void DSWP::preLoopSplit(Loop *L) {
 		generated.insert(func);
 	}
 
+
 	/*
 	 * prepare the actual parameters type
 	 */
 
+	// the array of arguments for the actual split function call
 	ArrayType *arrayType = ArrayType::get(eleType, livein.size());
-	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
-	trueArg->insertBefore(brInst);
+	AllocaInst *trueArg = new AllocaInst(arrayType, "", brInst);
 	//trueArg->setAlignment(8);
 
 	for (unsigned int i = 0; i < livein.size(); i++) {
@@ -103,83 +107,53 @@ void DSWP::preLoopSplit(Loop *L) {
 #undef ARGS
 
 		// get the element pointer where we're storing this argument
-		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-				(uint64_t) i);
-		//GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,"");		//use this cannot get the right type!
+		ConstantInt* idx = ConstantInt::get(
+				Type::getInt64Ty(*context), (uint64_t) i);
 		vector<Value *> arg;
 		arg.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
 		arg.push_back(idx);
-		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg,
-				arg, "");
-		ele_addr->insertBefore(brInst);
+		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
+				trueArg, arg, "", brInst);
 
-		//ele_addr->getType()->dump();
-
-		// add an instruction to actually store the value
+		// actually store the value
 		StoreInst *storeVal = new StoreInst(castVal, ele_addr, brInst);
 
 //		vector<Value *> showArg;
 //		showArg.push_back(castVal);
 //		Function *show = module->getFunction("showValue");
-//		CallInst *callShow = CallInst::Create(show, showArg.begin(), showArg.end());
+//		CallInst *callShow = CallInst::Create(show, showArg);
 //		callShow->insertBefore(brInst);
 	}
 
 	Function *init = module->getFunction("sync_init");
-	vector<Value *> args;
-	CallInst *callInit = CallInst::Create(init, args);
-	callInit->insertBefore(brInst);
+	CallInst *callInit = CallInst::Create(init, "", brInst);
+
 
 	/*
-	 * call functions
+	 * call the worker functions
 	 */
 	Function *delegate = module->getFunction("sync_delegate");
+	PointerType *finalType = PointerType::get(eleType, 0);
+
 	for (int i = 0; i < MAX_THREAD; i++) {
-		Function *func = allFunc[i];
+		// bit-cast the true argument into eleType*
+		BitCastInst *finalArg = new BitCastInst(
+				trueArg, finalType, "cast_args_" + itoa(i), brInst);
+
 		vector<Value*> args;
-		args.push_back(ConstantInt::get(Type::getInt32Ty(*context),
-				(uint64_t) i)); //tid
-		args.push_back(func); //the function pointer
-
-		PointerType * finalType = PointerType::get(eleType, 0);
-		//const Type * finalType = Type::getInt8PtrTy(*context); //debug
-
-		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
-		finalArg->insertBefore(brInst);
-
-		args.push_back(finalArg); //true arg that will be call by func
-		CallInst * callfunc = CallInst::Create(delegate, args);
-//		vector<Value *> targs;
-//		targs.push_back(finalArg);
-//		CallInst * callfunc = CallInst::Create(allFunc[i], targs.begin(), targs.end());
-
-		callfunc->insertBefore(brInst);
+		args.push_back( // the thread id
+				ConstantInt::get(Type::getInt32Ty(*context), (uint64_t) i));
+		args.push_back(allFunc[i]); // the function pointer
+		args.push_back(finalArg); // the bit-cast argument
+		CallInst * callfunc = CallInst::Create(delegate, args, "", brInst);
 	}
+
 
 	/*
 	 * join them back
 	 */
 	Function *join = module->getFunction("sync_join");
-	CallInst *callJoin = CallInst::Create(join);
-	callJoin->insertBefore(brInst);
-
-	//replaceBlock->dump();	//check if the new block is correct
-
-	//	//read back from memory
-	//
-	//	for (unsigned i = 0; i < livein.size(); i++) {
-	//		Value *val = livein[i];
-	//
-	//		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-	//				(uint64_t) i);
-	//		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,
-	//				""); //get the element ptr
-	//
-	//		Load * storeVal = new StoreInst(castVal, ele_addr);
-	//		storeVal->insertBefore(brInst);
-	//	}
-
-
+	CallInst *callJoin = CallInst::Create(join, "", brInst);
 }
 
 void DSWP::loopSplit(Loop *L) {
