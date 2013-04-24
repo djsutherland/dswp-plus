@@ -9,19 +9,20 @@ void DSWP::preLoopSplit(Loop *L) {
 	allFunc.clear();
 
 	/*
-	 * Insert a new block
+	 * Insert a new block to replace the old loop
 	 */
 	replaceBlock = BasicBlock::Create(*context, "loop-replace", func);
 	BranchInst *brInst = BranchInst::Create(exit, replaceBlock);
 	replaceBlock->moveBefore(exit);
 
+	// sanity check: the exit branch isn't in the loop
+	// you know, in case we don't trust Loop::getExitBlock or something
+	// NOTE: kind of pointless
 	if (L->contains(exit)) {
 		error("don't know why");
 	}
 
-	//BranchInst *brInst = BranchInst::Create(exit);
-	//newBlock->getInstList().push_back(brInst);
-	//every block to header (except the ones in the loop), will now redirect to here
+	// point branches to the loop header to replaceBlock instead
 	for (pred_iterator PI = pred_begin(header); PI != pred_end(header); ++PI) {
 		BasicBlock *pred = *PI;
 		if (L->contains(pred)) {
@@ -29,14 +30,17 @@ void DSWP::preLoopSplit(Loop *L) {
 		}
 		TerminatorInst *termInst = pred->getTerminator();
 
-		for (unsigned i = 0; i < termInst->getNumOperands(); i++) {
-			BasicBlock *bb = dyn_cast<BasicBlock> (termInst->getOperand(i));
+		for (unsigned int i = 0; i < termInst->getNumOperands(); i++) {
+			BasicBlock *bb = dyn_cast<BasicBlock>(termInst->getOperand(i));
 			if (bb == header) {
 				termInst->setOperand(i, replaceBlock);
 			}
 		}
 	}
 
+	// sanity check: nothing in the loop branches to the new replacement block
+	// you know, in case we don't trust Loop::contains or something
+	// NOTE: kind of pointless
 	for (Loop::block_iterator li = L->block_begin(); li != L->block_end(); li++) {
 		BasicBlock *BB = *li;
 		if (BB == replaceBlock) {
@@ -45,22 +49,24 @@ void DSWP::preLoopSplit(Loop *L) {
 	}
 
 	/*
-	 * prepare the function Type
+	 * add functions for the worker threads
 	 */
+
+	// type objects for the functions:  int8 * -> int8
 	vector<Type*> funArgTy;
 	PointerType* argPointTy = PointerType::get(Type::getInt8Ty(*context), 0);
 	funArgTy.push_back(argPointTy);
-	FunctionType *fType = FunctionType::get(Type::getInt8PtrTy(*context),
-			funArgTy, false);
-	//add functions
+	FunctionType *fType = FunctionType::get(
+			Type::getInt8PtrTy(*context), funArgTy, false);
+
+	// add the actual functions for each thread
 	for (int i = 0; i < MAX_THREAD; i++) {
-		//create functions to  each thread
-		Constant * c = module->getOrInsertFunction(itoa(loopCounter)
-				+ "_subloop_" + itoa(i), fType); //they both have same function type
-		if (c == NULL) {
+		Constant * c = module->getOrInsertFunction(
+				itoa(loopCounter) + "_subloop_" + itoa(i), fType);
+		if (c == NULL) {  // NOTE: don't think this is possible...?
 			error("no function!");
 		}
-		Function *func = cast<Function> (c);
+		Function *func = cast<Function>(c);
 		func->setCallingConv(CallingConv::C);
 		allFunc.push_back(func);
 		generated.insert(func);
@@ -74,29 +80,29 @@ void DSWP::preLoopSplit(Loop *L) {
 	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
 	trueArg->insertBefore(brInst);
 	//trueArg->setAlignment(8);
-	//trueArg->dump();
 
-	for (unsigned i = 0; i < livein.size(); i++) {
+	for (unsigned int i = 0; i < livein.size(); i++) {
 		Value *val = livein[i];
 
-		CastInst * castVal;
-
+		// add an instruction to cast the value into eleType to store in the
+		// argument array
+		CastInst *castVal;
+#define ARGS val, eleType, val->getName() + "_arg", brInst
 		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(val, eleType, val->getName() + "_arg");
+			castVal = new SExtInst(ARGS);
 		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(val, eleType, val->getName() + "_arg");
+			castVal = new PtrToIntInst(ARGS);
 		} else if (val->getType()->isFloatingPointTy()) {
 			if (val->getType()->isFloatTy()) {
-				error("floatTypeSuck");
+				error("floatTypeSuck"); // NOTE: not sure what the problem is?
 			}
-			castVal = new BitCastInst(val, eleType, val->getName() + "_arg");
+			castVal = new BitCastInst(ARGS);
 		} else {
 			error("what's the hell of the type");
 		}
+#undef ARGS
 
-		castVal->insertBefore(brInst);
-
-		//get the element ptr
+		// get the element pointer where we're storing this argument
 		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
 				(uint64_t) i);
 		//GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,"");		//use this cannot get the right type!
@@ -109,8 +115,8 @@ void DSWP::preLoopSplit(Loop *L) {
 
 		//ele_addr->getType()->dump();
 
-		StoreInst * storeVal = new StoreInst(castVal, ele_addr);
-		storeVal->insertBefore(brInst);
+		// add an instruction to actually store the value
+		StoreInst *storeVal = new StoreInst(castVal, ele_addr, brInst);
 
 //		vector<Value *> showArg;
 //		showArg.push_back(castVal);
@@ -195,7 +201,7 @@ void DSWP::loopSplit(Loop *L) {
 		Function *curFunc = allFunc[i];
 
 		//each partition contain several scc
-		map<Instruction *, bool> relinst;
+		// map<Instruction *, bool> relinst;
 		set<BasicBlock *> relbb;
 
 //		cout << part[i].size() << endl;
@@ -509,7 +515,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
-	sccId.clear(); // XXX this crashes...
+	sccId.clear();
 	used.clear();
 	list.clear();
 	assigned.clear();
