@@ -242,6 +242,13 @@ void DSWP::buildPDG(Loop *L) {
 		} while (it != bb_ordered.begin());
 	}
 
+	cout<<">>Printing out names of dummy blocks inside our fake function"<<endl;
+	for (Function::iterator FI = ctrlfunc->begin(), FE = ctrlfunc->end();
+		 FI != FE; ++FI) {
+		cout<<(*FI).getName().str()<<", ";
+	}
+	cout<<endl;
+
 	//Add branch instructions for dummy blocks
 	if (!bb_ordered.empty()) {
 		std::vector<BasicBlock *>::iterator it = bb_ordered.end();
@@ -299,16 +306,13 @@ void DSWP::buildPDG(Loop *L) {
 		} while (it != bb_ordered.begin());
 	}
 
-
-	cout<<">>Printing out dummy blocks inside our fake function"<<endl;
+	cout<<">>Printing out blocks"<<endl;
 	for (Function::iterator FI = ctrlfunc->begin(), FE = ctrlfunc->end();
 		 FI != FE; ++FI) {
-		cout<<(*FI).getName().str()<<", "<<endl;
+		cout<<"Contents of block "<<(*FI).getName().str()<<":"<<endl;
 		(*FI).print(outstream);
 		cout<<endl;
 	}
-	cout<<endl;
-
 
 	/*
 	 *
