@@ -37,19 +37,26 @@ void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTre
 }
 
 void DSWP::dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
-					std::vector<BasicBlock *> &ord) {
+					std::vector<BasicBlock *> &ord, Loop *L) {
 	vis.insert(BB); //Mark as visited
 	for (succ_iterator SI = succ_begin(BB), E = succ_end(BB); SI != E; ++SI)
-		if (vis.find(*SI) != vis.end())
-			dfsVisit(*SI, vis, ord);
+		if (L->contains(*SI) && vis.find(*SI) == vis.end())
+			dfsVisit(*SI, vis, ord, L);
 
 	ord.push_back(BB);
 }
 
 void DSWP::buildPDG(Loop *L) {
+	cout<<">>Building PDG for new loop"<<endl;
+	cout<<">>Enumerating blocks"<<endl;
+	raw_os_ostream outstream(cout);
+
     //Initialize PDG
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
 		BasicBlock *BB = *bi;
+		cout<<">>BASIC BLOCK ("<<BB->getName().str()<<")"<<endl;
+		BB->print(outstream);
+		cout<<endl<<endl;
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
 			Instruction *inst = &(*ui);
 
@@ -65,6 +72,8 @@ void DSWP::buildPDG(Loop *L) {
 			rev[inst] = new vector<Edge>();
 		}
 	}
+	
+	cout<<">>End basic blocks"<<endl;
 
 	//LoopInfo &li = getAnalysis<LoopInfo>();
 
@@ -80,11 +89,15 @@ void DSWP::buildPDG(Loop *L) {
 
 			//data dependence = register dependence + memory dependence
 
-
 			//begin register dependence
 			for (Value::use_iterator ui = ii->use_begin(); ui != ii->use_end(); ui++) {
 				if (Instruction *user = dyn_cast<Instruction>(*ui)) {
 					if (L->contains(user)) {
+						cout<<">>REG dependency: [[";
+						inst->print(outstream);
+						cout<<"]] -> [[";
+						user->print(outstream);
+						cout<<"]]"<<endl;
 						addEdge(inst, user, REG);
 					}
 				}
@@ -100,22 +113,52 @@ void DSWP::buildPDG(Loop *L) {
 
 				if (isa<LoadInst>(inst)) {
 					//READ AFTER WRITE
-					if (isa<StoreInst>(dep))
+					if (isa<StoreInst>(dep)) {
+						cout<<">>MEM read after write (true) dependency: [[";
+						dep->print(outstream);
+						cout<<"]] -> [[";
+						inst->print(outstream);
+						cout<<"]]"<<endl;
 						addEdge(dep, inst, DTRUE);
+					}
 					//READ AFTER ALLOCATE
-					if (isa<AllocaInst>(dep))
+					if (isa<AllocaInst>(dep)) {
+						cout<<">>MEM read after allocate (true) dependency: [[";
+						dep->print(outstream);
+						cout<<"]] -> [[";
+						inst->print(outstream);
+						cout<<"]]"<<endl;
 						addEdge(dep, inst, DTRUE);
+					}
 				}
 				if (isa<StoreInst>(inst)) {
 					//WRITE AFTER READ
-					if (isa<LoadInst>(dep))
+					if (isa<LoadInst>(dep)) {
+						cout<<">>MEM write after read (anti) dependency: [[";
+						dep->print(outstream);
+						cout<<"]] -> [[";
+						inst->print(outstream);
+						cout<<"]]"<<endl;
 						addEdge(dep, inst, DANTI);
+					}
 					//WRITE AFTER WRITE
-					if (isa<StoreInst>(dep))
+					if (isa<StoreInst>(dep)) {
+						cout<<">>MEM write after write (out) dependency: [[";
+						dep->print(outstream);
+						cout<<"]] -> [[";
+						inst->print(outstream);
+						cout<<"]]"<<endl;
 						addEdge(dep, inst, DOUT);
+					}
 					//WRITE AFTER ALLOCATE
-					if (isa<AllocaInst>(dep))
+					if (isa<AllocaInst>(dep)) {
+						cout<<">>MEM write after allocate (out) dependency: [[";
+						dep->print(outstream);
+						cout<<"]] -> [[";
+						inst->print(outstream);
+						cout<<"]]"<<endl;
 						addEdge(dep, inst, DOUT);
+					}
 				}
 				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
@@ -123,12 +166,16 @@ void DSWP::buildPDG(Loop *L) {
 		}//for ii
 	}//for bi
 
+	cout<<">>Finished finding data dependences"<<endl;
+
 
 	/* 
 	 *
 	 * Topologically sort blocks and create peeled loop
 	 *
 	 */
+
+	cout<<">>Finding control dependences"<<endl;
 
 	BasicBlock *curheader = L->getHeader();
 	Function *curfunc = header->getParent();
@@ -144,16 +191,26 @@ void DSWP::buildPDG(Loop *L) {
 	std::vector<BasicBlock *> dummylist;
 
 	// DFS to (reverse) topologically sort the basic blocks
+	b_visited.clear();
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 					be = L->getBlocks().end(); bi != be; bi++) {
 		BasicBlock *BB = *bi;
-		if (b_visited.find(BB) != b_visited.end()) //Not visited 
-			dfsVisit(BB, b_visited, bb_ordered);
+		if (b_visited.find(BB) == b_visited.end()) //Not visited 
+			dfsVisit(BB, b_visited, bb_ordered, L);
 	}
+
+	cout<<">>Reverse topological sort:"<<endl;
+	assert(!bb_ordered.empty());
+	for (std::vector<BasicBlock *>::iterator it = bb_ordered.begin(); it !=
+		bb_ordered.end(); ++it) {
+	   cout<<(*it)->getName().str()<<", ";
+	}
+	cout<<endl;
 
 	std::map<BasicBlock *, std::pair<BasicBlock *, BasicBlock *> > realtodummy;
 	std::map<BasicBlock *, BasicBlock *> dummytoreal;
 	std::map<BasicBlock *, unsigned int> instnum;
+	LLVMContext &ctxt = ctrlfunc->getParent()->getContext();
 
 	//Create dummy basic blocks and populate lookup tables
 	if (!bb_ordered.empty()) {
@@ -162,11 +219,16 @@ void DSWP::buildPDG(Loop *L) {
 		do {
 			--it;
 			//Dummy block for first iteration
-			BasicBlock *newbb = BasicBlock::Create(getGlobalContext(),
-												   "", ctrlfunc, 0); 
+			const std::string str1 = "tophalf_" + (*it)->getName().str(); 
+			const std::string str2 = "bottomhalf_" + (*it)->getName().str(); 
+			const Twine n1(str1);
+			const Twine n2(str2);
+			cout<<"n1 = "<<n1.str()<<", n2 = "<<n2.str()<<endl;
+			BasicBlock *newbb = BasicBlock::Create(ctxt,
+												   n1, ctrlfunc, 0); 
 			//Dummy block for second iteration
-			BasicBlock *newbb2 = BasicBlock::Create(getGlobalContext(),
-												   "", ctrlfunc, 0); 
+			BasicBlock *newbb2 = BasicBlock::Create(ctxt,
+												   n2, ctrlfunc, 0); 
 
 			dummylist.push_back(newbb);
 			dummylist.push_back(newbb2);
@@ -236,6 +298,17 @@ void DSWP::buildPDG(Loop *L) {
 			}
 		} while (it != bb_ordered.begin());
 	}
+
+
+	cout<<">>Printing out dummy blocks inside our fake function"<<endl;
+	for (Function::iterator FI = ctrlfunc->begin(), FE = ctrlfunc->end();
+		 FI != FE; ++FI) {
+		cout<<(*FI).getName().str()<<", "<<endl;
+		(*FI).print(outstream);
+		cout<<endl;
+	}
+	cout<<endl;
+
 
 	/*
 	 *

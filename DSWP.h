@@ -84,7 +84,7 @@ private:
 	void addControlDependence(BasicBlock *a, BasicBlock *b);
 
 	void dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
-						std::vector<BasicBlock *> &ord);
+						std::vector<BasicBlock *> &ord, Loop *L);
 
 	//part 2: scc and dag
 	void findSCC(Loop *L);
