@@ -6,22 +6,25 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::preLoopSplit(Loop *L) {
+	// Makes the loop-replacement block that calls the worker threads.
 	allFunc.clear();
 
+
 	/*
-	 * Insert a new block
+	 * Insert a new block to replace the old loop
 	 */
 	replaceBlock = BasicBlock::Create(*context, "loop-replace", func);
 	BranchInst *brInst = BranchInst::Create(exit, replaceBlock);
 	replaceBlock->moveBefore(exit);
 
+	// sanity check: the exit branch isn't in the loop
+	// you know, in case we don't trust Loop::getExitBlock or something
+	// NOTE: kind of pointless
 	if (L->contains(exit)) {
 		error("don't know why");
 	}
 
-	//BranchInst *brInst = BranchInst::Create(exit);
-	//newBlock->getInstList().push_back(brInst);
-	//every block to header (except the ones in the loop), will now redirect to here
+	// point branches to the loop header to replaceBlock instead
 	for (pred_iterator PI = pred_begin(header); PI != pred_end(header); ++PI) {
 		BasicBlock *pred = *PI;
 		if (L->contains(pred)) {
@@ -29,318 +32,273 @@ void DSWP::preLoopSplit(Loop *L) {
 		}
 		TerminatorInst *termInst = pred->getTerminator();
 
-		for (unsigned i = 0; i < termInst->getNumOperands(); i++) {
-			BasicBlock *bb = dyn_cast<BasicBlock> (termInst->getOperand(i));
+		for (unsigned int i = 0; i < termInst->getNumOperands(); i++) {
+			BasicBlock *bb = dyn_cast<BasicBlock>(termInst->getOperand(i));
 			if (bb == header) {
 				termInst->setOperand(i, replaceBlock);
 			}
 		}
 	}
 
-	for (Loop::block_iterator li = L->block_begin(); li != L->block_end(); li++) {
+	// sanity check: nothing in the loop branches to the new replacement block
+	// you know, in case we don't trust Loop::contains or something
+	// NOTE: kind of pointless
+	for (Loop::block_iterator li = L->block_begin(), le = L->block_end();
+			li != le; li++) {
 		BasicBlock *BB = *li;
 		if (BB == replaceBlock) {
 			error("the block should not appear here!");
 		}
 	}
 
+
 	/*
-	 * prepare the function Type
+	 * add functions for the worker threads
 	 */
+
+	// type objects for the functions:  int8 * -> int8
 	vector<Type*> funArgTy;
 	PointerType* argPointTy = PointerType::get(Type::getInt8Ty(*context), 0);
 	funArgTy.push_back(argPointTy);
-	FunctionType *fType = FunctionType::get(Type::getInt8PtrTy(*context),
-			funArgTy, false);
-	//add functions
+	FunctionType *fType = FunctionType::get(
+			Type::getInt8PtrTy(*context), funArgTy, false);
+
+	// add the actual functions for each thread
 	for (int i = 0; i < MAX_THREAD; i++) {
-		//create functions to  each thread
-		Constant * c = module->getOrInsertFunction(itoa(loopCounter)
-				+ "_subloop_" + itoa(i), fType); //they both have same function type
-		if (c == NULL) {
+		Constant * c = module->getOrInsertFunction(
+				itoa(loopCounter) + "_subloop_" + itoa(i), fType);
+		if (c == NULL) {  // NOTE: don't think this is possible...?
 			error("no function!");
 		}
-		Function *func = cast<Function> (c);
+		Function *func = cast<Function>(c);
 		func->setCallingConv(CallingConv::C);
 		allFunc.push_back(func);
 		generated.insert(func);
 	}
 
+
 	/*
 	 * prepare the actual parameters type
 	 */
 
+	// the array of arguments for the actual split function call
 	ArrayType *arrayType = ArrayType::get(eleType, livein.size());
-	AllocaInst *trueArg = new AllocaInst(arrayType, ""); //true argment for actual (the split one) function call
-	trueArg->insertBefore(brInst);
+	AllocaInst *trueArg = new AllocaInst(arrayType, "", brInst);
 	//trueArg->setAlignment(8);
-	//trueArg->dump();
 
-	for (unsigned i = 0; i < livein.size(); i++) {
+	for (unsigned int i = 0; i < livein.size(); i++) {
 		Value *val = livein[i];
 
-		CastInst * castVal;
-
+		// add an instruction to cast the value into eleType to store in the
+		// argument array
+		CastInst *castVal;
+#define ARGS val, eleType, val->getName() + "_arg", brInst
 		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(val, eleType, val->getName() + "_arg");
+			castVal = new SExtInst(ARGS);
 		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(val, eleType, val->getName() + "_arg");
+			castVal = new PtrToIntInst(ARGS);
 		} else if (val->getType()->isFloatingPointTy()) {
 			if (val->getType()->isFloatTy()) {
-				error("floatTypeSuck");
+				error("floatTypeSuck"); // NOTE: not sure what the problem is?
 			}
-			castVal = new BitCastInst(val, eleType, val->getName() + "_arg");
+			castVal = new BitCastInst(ARGS);
 		} else {
 			error("what's the hell of the type");
 		}
+#undef ARGS
 
-		castVal->insertBefore(brInst);
-
-		//get the element ptr
-		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-				(uint64_t) i);
-		//GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,"");		//use this cannot get the right type!
+		// get the element pointer where we're storing this argument
+		ConstantInt* idx = ConstantInt::get(
+				Type::getInt64Ty(*context), (uint64_t) i);
 		vector<Value *> arg;
 		arg.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
 		arg.push_back(idx);
-		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg,
-				arg, "");
-		ele_addr->insertBefore(brInst);
+		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
+				trueArg, arg, "", brInst);
 
-		//ele_addr->getType()->dump();
-
-		StoreInst * storeVal = new StoreInst(castVal, ele_addr);
-		storeVal->insertBefore(brInst);
+		// actually store the value
+		StoreInst *storeVal = new StoreInst(castVal, ele_addr, brInst);
 
 //		vector<Value *> showArg;
 //		showArg.push_back(castVal);
 //		Function *show = module->getFunction("showValue");
-//		CallInst *callShow = CallInst::Create(show, showArg.begin(), showArg.end());
+//		CallInst *callShow = CallInst::Create(show, showArg);
 //		callShow->insertBefore(brInst);
 	}
 
 	Function *init = module->getFunction("sync_init");
-	vector<Value *> args;
-	CallInst *callInit = CallInst::Create(init, args);
-	callInit->insertBefore(brInst);
+	CallInst *callInit = CallInst::Create(init, "", brInst);
+
 
 	/*
-	 * call functions
+	 * call the worker functions
 	 */
 	Function *delegate = module->getFunction("sync_delegate");
+	PointerType *finalType = PointerType::get(eleType, 0);
+
 	for (int i = 0; i < MAX_THREAD; i++) {
-		Function *func = allFunc[i];
+		// bit-cast the true argument into eleType*
+		BitCastInst *finalArg = new BitCastInst(
+				trueArg, finalType, "cast_args_" + itoa(i), brInst);
+
 		vector<Value*> args;
-		args.push_back(ConstantInt::get(Type::getInt32Ty(*context),
-				(uint64_t) i)); //tid
-		args.push_back(func); //the function pointer
-
-		PointerType * finalType = PointerType::get(eleType, 0);
-		//const Type * finalType = Type::getInt8PtrTy(*context); //debug
-
-		BitCastInst * finalArg = new BitCastInst(trueArg, finalType);
-		finalArg->insertBefore(brInst);
-
-		args.push_back(finalArg); //true arg that will be call by func
-		CallInst * callfunc = CallInst::Create(delegate, args);
-//		vector<Value *> targs;
-//		targs.push_back(finalArg);
-//		CallInst * callfunc = CallInst::Create(allFunc[i], targs.begin(), targs.end());
-
-		callfunc->insertBefore(brInst);
+		args.push_back( // the thread id
+				ConstantInt::get(Type::getInt32Ty(*context), (uint64_t) i));
+		args.push_back(allFunc[i]); // the function pointer
+		args.push_back(finalArg); // the bit-cast argument
+		CallInst * callfunc = CallInst::Create(delegate, args, "", brInst);
 	}
+
 
 	/*
 	 * join them back
 	 */
 	Function *join = module->getFunction("sync_join");
-	CallInst *callJoin = CallInst::Create(join);
-	callJoin->insertBefore(brInst);
-
-	//replaceBlock->dump();	//check if the new block is correct
-
-	//	//read back from memory
-	//
-	//	for (unsigned i = 0; i < livein.size(); i++) {
-	//		Value *val = livein[i];
-	//
-	//		ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-	//				(uint64_t) i);
-	//		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(trueArg, idx,
-	//				""); //get the element ptr
-	//
-	//		Load * storeVal = new StoreInst(castVal, ele_addr);
-	//		storeVal->insertBefore(brInst);
-	//	}
-
-
+	CallInst *callJoin = CallInst::Create(join, "", brInst);
 }
 
-void DSWP::loopSplit(Loop *L) {
-	cout << "Loop split" << endl;
-	//	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
-	//		BasicBlock *BB = *bi;
-	//		for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
-	//			Instruction *inst = &(*ii);
-	//		}
-	//	}
 
+void DSWP::loopSplit(Loop *L) {
+	// cout << "Loop split" << endl;
 
 	//check for each partition, find relevant blocks, set could auto deduplicate
 
 	for (int i = 0; i < MAX_THREAD; i++) {
-		cout << "create function for thread " + itoa(i) << endl;
+		cout << "// Creating function for thread " + itoa(i) << endl;
 
-		//create function body to each thread
+		// create function body for each thread
 		Function *curFunc = allFunc[i];
 
-		//each partition contain several scc
-		map<Instruction *, bool> relinst;
-		set<BasicBlock *> relbb;
-
-//		cout << part[i].size() << endl;
-
-		//relbb.insert(header);
 
 		/*
-		 * analysis the dependent blocks
+		 * figure out which blocks we use or are dependent on in this thread
 		 */
-		for (vector<int>::iterator ii = part[i].begin(); ii != part[i].end(); ii++) {
+		set<BasicBlock *> relbb;
+		//relbb.insert(header);
+
+		for (vector<int>::iterator ii = part[i].begin(), ie = part[i].end();
+				ii != ie; ++ii) {
 			int scc = *ii;
-			for (vector<Instruction *>::iterator iii = InstInSCC[scc].begin(); iii
-					!= InstInSCC[scc].end(); iii++) {
+			for (vector<Instruction *>::iterator iii = InstInSCC[scc].begin(),
+												 iie = InstInSCC[scc].end();
+					iii != iie; ++iii) {
 				Instruction *inst = *iii;
-				//relinst[inst] = true;
 				relbb.insert(inst->getParent());
 
-				//add blocks which the instruction dependent on
-				for (vector<Edge>::iterator ei = rev[inst]->begin(); ei
-						!= rev[inst]->end(); ei++) {
+				// add blocks which the instruction is dependent on
+				const vector<Edge> &edges = *rev[inst];
+				for (vector<Edge>::const_iterator ei = edges.begin(),
+												  ee = edges.end();
+						ei != ee; ei++) {
 					Instruction *dep = ei->v;
-					//relinst[dep] = true;
 					relbb.insert(dep->getParent());
-					//cout << dep->getParent()->getName().str() << endl;
 				}
 			}
 		}
 
-//		cout << "depend block: " << relbb.size() << " " << "depend inst: " << relinst.size() << endl;
-//		cout << "header: " << header->getName().str() << endl;
-//		//check consistence of the blocks
-//		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
-//			BasicBlock *BB = *bi;
-//			cout << BB->getName().str() << "\t";
-//		}
-//		cout << endl;
-//		//check consitence of the instructions
-//		for (map<Instruction *, bool>::iterator mi = relinst.begin(); mi != relinst.end(); mi++) {
-//			cout << dname[mi->first] << "\t";
-//		}
-//		cout << endl;
-
-		map<BasicBlock *, BasicBlock *> BBMap; //map the old block to new block
-
 		if (relbb.size() == 0) {
-			error("has size 0");
+			error("no related blocks?");
 		}
 
 		/*
-		 * Create the new blocks to the new function, including an entry and exit
+		 * Create the new blocks for the new function, including entry and exit
 		 */
-		BasicBlock * newEntry = BasicBlock::Create(*context, "new-entry",
-				curFunc);
-		BasicBlock * newExit =
-				BasicBlock::Create(*context, "new-exit", curFunc);
+		map<BasicBlock *, BasicBlock *> BBMap; // map old blocks to new block
 
-		//copy the basicblock and modify the control flow
-		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
+		BasicBlock *newEntry =
+				BasicBlock::Create(*context, "new-entry", curFunc);
+		BasicBlock *newExit = BasicBlock::Create(*context, "new-exit", curFunc);
+
+		// make copies of the basic blocks
+		for (set<BasicBlock *>::iterator bi = relbb.begin(), be = relbb.end();
+				bi != be; ++bi) {
 			BasicBlock *BB = *bi;
-			BasicBlock *NBB = BasicBlock::Create(*context, BB->getName().str()
-					+ "_" + itoa(i), curFunc, newExit);
-			//BranchInst *term = BranchInst::Create(NBB, NBB);
-
-			BBMap[BB] = NBB;
+			BBMap[BB] = BasicBlock::Create(*context,
+					BB->getName().str() + "_" + itoa(i), curFunc, newExit);
 		}
+		BBMap[exit] = newExit;
 
-		//curFunc->dump();
-		//continue;
-
-		/*
-		 * insert the control flow and normal instructions
-		 */
 		if (BBMap[header] == NULL) {
 			error("this must be a error early in dependency analysis stage");
 		}
-		BranchInst * newToHeader = BranchInst::Create(BBMap[header], newEntry); //pointer to the header so loop can be executed
 
-		//BranchInst * newToHeader = BranchInst::Create(newExit, newEntry); //pointer to the header so loop can be executed
+		// branch from the entry block to the new header
+		BranchInst *newToHeader = BranchInst::Create(BBMap[header], newEntry);
 
-
+		// return null
 		ReturnInst * newRet = ReturnInst::Create(*context,
-				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit); //return null
+				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit);
 
-		//continue;
-		//curFunc->dump();
-
-		for (set<BasicBlock *>::iterator bi = relbb.begin(); bi != relbb.end(); bi++) {
+		/*
+		 * copy over the instructions in each block
+		 */
+		for (set<BasicBlock *>::iterator bi = relbb.begin(), be = relbb.end();
+				bi != be; bi++) {
 			BasicBlock *BB = *bi;
 			BasicBlock *NBB = BBMap[BB];
 
-			for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
-				Instruction * inst = ii;
+			for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
+					ii != ie; ii++) {
+				Instruction *inst = ii;
 
-				if (assigned[sccId[inst]] != i && !isa<TerminatorInst> (inst)) //TODO I NEED TO CHECK THIS BACK
+				if (assigned[sccId[inst]] != i && !isa<TerminatorInst>(inst)) {
+					// TODO I NEED TO CHECK THIS BACK
+					// NOTE: that's is from the original code. what'd he mean?
 					continue;
+				}
 
 				Instruction *newInst = inst->clone();
-
 				if (inst->hasName()) {
 					newInst->setName(inst->getName() + "_" + itoa(i));
 				}
 
-				if (isa<TerminatorInst> (newInst)) {
-					for (unsigned j = 0; j < newInst->getNumOperands(); j++) {
+				// TODO: handle phi nodes here
+
+				// re-point branches and such to new blocks
+				if (isa<TerminatorInst>(newInst)) {
+					// re-point any successor blocks
+					for (unsigned int j = 0, je = newInst->getNumOperands();
+							j < je; j++) {
 						Value *op = newInst->getOperand(j);
 
-						if (BasicBlock * oldBB = dyn_cast<BasicBlock>(op)) {
-							BasicBlock * newBB = BBMap[oldBB];
+						if (BasicBlock *oldBB = dyn_cast<BasicBlock>(op)) {
+							BasicBlock *newBB = BBMap[oldBB];
 
-							if (oldBB == L->getExitBlock()) {
-								newBB = newExit;
-							} else if (!L->contains(oldBB)) {	//so it is a block outside the loop
-								//cout << oldBB->getName().str() << endl;
+							if (oldBB != exit && !L->contains(oldBB)) {
+								// branching to a block outside the loop that's
+								// not the exit. this should be impossible...
+								error("crazy branch :(");
 								continue;
 							}
 
-							//cout << newBB->getName().str() << endl;
-
+							// if we branched to a block not in this thread,
+							// go to the next post-dominator
+							// NOTE: right?
 							while (newBB == NULL) {
-								//find the nearest post-dominator (TODO not sure it is correct)+6
 								oldBB = pre[oldBB];
 								newBB = BBMap[oldBB];
 							}
-							//replace the target block
+
+							// replace the target block
 							newInst->setOperand(j, newBB);
 
-							//newInst->dump();
-							//cout << newBB->getName().str() << endl;
-
-							//TODO check if there are two branch, one branch is not in the partition, then what the branch
+							// TODO check if there are two branch, one branch
+							// is not in the partition, then what the branch
 						}
 					}
-					//oldToNew[inst] = newInst;	//should not use
 				}
+
 				instMap[i][inst] = newInst;
 				newInstAssigned[newInst] = i;
 				newToOld[newInst] = inst;
 
 				//newInst->dump();
 				NBB->getInstList().push_back(newInst);
-			}// for inst
-		}// for BB
+			}
+		}
 
 		/*
-		 * Insert load instruction to load argument, (replace the live in variables)
+		 * Load the arguments, replacing variables that are live at the start
 		 */
 		Function::ArgumentListType &arglist = curFunc->getArgumentList();
 		if (arglist.size() != 1) {
@@ -349,43 +307,39 @@ void DSWP::loopSplit(Loop *L) {
 		Argument *args = arglist.begin(); //the function only have one argmument
 
 		Function *showPlace = module->getFunction("showPlace");
-		vector<Value *> placeArg;
-		CallInst *inHeader = CallInst::Create(showPlace, placeArg);
+		CallInst *inHeader = CallInst::Create(showPlace);
 		inHeader->insertBefore(newToHeader);
 
-		BitCastInst *castArgs = new BitCastInst(args, PointerType::get(
-				Type::getInt64Ty(*context), 0));
+		BitCastInst *castArgs = new BitCastInst(
+				args, PointerType::get(Type::getInt64Ty(*context), 0));
 		castArgs->insertBefore(newToHeader);
 
-		for (unsigned j = 0; j < livein.size(); j++) {
-			cout << livein[j]->getName().str() << endl;
+		for (unsigned int j = 0, je = livein.size(); j < je; j++) {
+			cout << "Handling argument: " << livein[j]->getName().str() << endl;
 
-			ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-					(uint64_t) j);
-			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(castArgs, idx, ""); //get the element ptr
+			// get pointer to the jth argument
+			ConstantInt* idx = ConstantInt::get(
+					Type::getInt64Ty(*context), (uint64_t) j);
+			GetElementPtrInst* ele_addr =
+					GetElementPtrInst::Create(castArgs, idx, "");
 			ele_addr->insertBefore(newToHeader);
-			LoadInst * ele_val = new LoadInst(ele_addr);
+
+			// load it
+			LoadInst *ele_val = new LoadInst(ele_addr);
 			ele_val->setAlignment(8);
 			ele_val->setName(livein[j]->getName().str() + "_val");
 			ele_val->insertBefore(newToHeader);
 
-//			BitCastInst *addcast = new BitCastInst(ele_addr, Type::getInt8PtrTy(*context));
-//			addcast->insertBefore(newToHeader);
-//			vector<Value *> showArg2;
-//			showArg2.push_back(addcast);
-//			Function *showptr = module->getFunction("showPtr");
-//			CallInst *callShowptr = CallInst::Create(showptr, showArg2.begin(), showArg2.end());
-//			callShowptr->insertBefore(newToHeader);
-//
+			// debug: show the value
 			vector<Value *> showArg;
 			showArg.push_back(ele_val);
 			Function *show = module->getFunction("showValue");
 			CallInst *callShow = CallInst::Create(show, showArg);
 			callShow->insertBefore(newToHeader);
 
+			// cast it to the appropriate type
 			Value *val = livein[j];
 			CastInst *ele_cast;
-
 			if (val->getType()->isIntegerTy()) {
 				ele_cast = new TruncInst(ele_val, val->getType());
 			} else if (val->getType()->isPointerTy()) {
@@ -400,64 +354,48 @@ void DSWP::loopSplit(Loop *L) {
 				error("what's the hell of the type");
 				//ele_cast  = new BitCastInst(ele_val, val->getType());
 			}
-
 			ele_cast->insertBefore(newToHeader);
 			instMap[i][val] = ele_cast;
 		}
 
 		/*
-		 * Replace the use of intruction def in the function (reg dep should be finshied in insert syn
+		 * Replace the use of intruction def in the function.
+		 * reg dep should be finished in insert syn
 		 */
-		for (inst_iterator ii = inst_begin(curFunc); ii != inst_end(curFunc); ii++) {
+		for (inst_iterator ii = inst_begin(curFunc), ie = inst_end(curFunc);
+				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
-			for (unsigned j = 0; j < inst->getNumOperands(); j++) {
+			// TODO: handle phi nodes here
+			for (unsigned int j = 0, je = inst->getNumOperands(); j < je; ++j) {
 				Value *op = inst->getOperand(j);
 
 				if (isa<BasicBlock>(op))
 					continue;
 
-				if (Value * newArg = instMap[i][op]) {
-					//cout << "Asdfa" << endl;
+				if (Value *newArg = instMap[i][op]) {
 					inst->setOperand(j, newArg);
 				}
-//				else if (oldToNew[op]){
-//					//inst->dump();
-//					inst->setOperand(j, oldToNew[op]);	//set a new variable but is in other thread, however, now we don't have ref to original loop
-//					error("dswp4, here should be careful, not neccessary a error");
-//				}
 			}
 		}
-
-		//curFunc->dump();
 	}
-
-	/*
-	 * Insert Syn to gurantee
-	 */
-
-	//cout << "test_now" << endl;
-
-	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
-	//	Instruction *allocPos = func->getEntryBlock().getTerminator();
-	//
-	//	vector<StoreInst *> stores;
-	//	for (set<Value *>::iterator vi = defin.begin(); vi != defin.end(); vi++) {	//TODO: is defin enough
-	//		Value *val = *vi;
-	//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getName().str() + "_ptr", allocPos);
-	//		varToMem[val] = arg;
-	//	}
 }
 
+
+// note that despite being in step 4, this is actually called after step 5
 void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 
 	/*
-	 * move the produce instruction which been inserted after the branch in front of it
+	 * move the produce instructions, which have been inserted after the branch,
+	 * in front of it
 	 */
 	for (int i = 0; i < MAX_THREAD; i++) {
-		for (Function::iterator bi = allFunc[i]->begin(); bi != allFunc[i]->end(); bi++) {
-			BasicBlock * bb = bi;
+		for (Function::iterator bi = allFunc[i]->begin(),
+								be = allFunc[i]->end();
+				bi != be; ++bi) {
+			BasicBlock *bb = bi;
 			TerminatorInst *term = NULL;
-			for (BasicBlock::iterator ii = bb->begin(); ii != bb->end(); ii++) {
+			for (BasicBlock::iterator ii = bb->begin(), ie = bb->end();
+					ii != ie; ++ii) {
 				Instruction *inst = ii;
 				if (isa<TerminatorInst>(inst)) {
 					term = dyn_cast<TerminatorInst>(inst);
@@ -469,7 +407,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 				error("term cannot be null");
 			}
 
-			while (1) {
+			while (true) {
 				Instruction *last = &bb->getInstList().back();
 				if (isa<TerminatorInst>(last))
 					break;
@@ -479,9 +417,11 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	}
 
 	cout << "begin to delete loop" << endl;
-	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end(); ii != ie; ii = i_next) {
+		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end();
+				ii != ie; ii = i_next) {
 			i_next = ii;
 			++i_next;
 			Instruction &inst = *ii;
@@ -490,26 +430,24 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 		}
 	}
 
-	// Delete the basic blocks only afterwards, so later backwards branches don't break
-	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+	// Delete the basic blocks only afterwards
+	// so that backwards branch instructions don't break
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
 		BB->eraseFromParent();
 	}
 
 	LPM.deleteLoopFromQueue(L);
 
-	for (int i = 0; i < MAX_THREAD; i++) {
-//		allFunc[i]->dump();
-	}
-	cout << "other stuff" << endl;
-
+	cout << "clearing metadata" << endl;
 	pdg.clear();
 	rev.clear();
 	dag.clear();
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
-	sccId.clear(); // XXX this crashes...
+	sccId.clear();
 	used.clear();
 	list.clear();
 	assigned.clear();
@@ -525,8 +463,8 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	defin.clear();
 	liveout.clear();
 	dname.clear();
-	//cout << Type::getInt8PtrTy(*context, 0)->
 }
+
 
 void DSWP::getLiveinfo(Loop * L) {
 	defin.clear();
@@ -534,10 +472,12 @@ void DSWP::getLiveinfo(Loop * L) {
 	liveout.clear();
 
 	//currently I don't want to use standard liveness analysis
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi
-			!= L->getBlocks().end(); bi++) {
+	for (Loop::block_iterator bi = L->getBlocks().begin(),
+							  be = L->getBlocks().end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+		for (BasicBlock::iterator ui = BB->begin(), ue = BB->end();
+				ui != ue; ++ui) {
 			Instruction *inst = &(*ui);
 			if (util.hasNewDef(inst)) {
 				defin.push_back(inst);
