@@ -43,7 +43,8 @@ void DSWP::preLoopSplit(Loop *L) {
 	// sanity check: nothing in the loop branches to the new replacement block
 	// you know, in case we don't trust Loop::contains or something
 	// NOTE: kind of pointless
-	for (Loop::block_iterator li = L->block_begin(); li != L->block_end(); li++) {
+	for (Loop::block_iterator li = L->block_begin(), le = L->block_end();
+			li != le; li++) {
 		BasicBlock *BB = *li;
 		if (BB == replaceBlock) {
 			error("the block should not appear here!");
@@ -384,13 +385,17 @@ void DSWP::loopSplit(Loop *L) {
 void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 
 	/*
-	 * move the produce instruction which been inserted after the branch in front of it
+	 * move the produce instructions, which have been inserted after the branch,
+	 * in front of it
 	 */
 	for (int i = 0; i < MAX_THREAD; i++) {
-		for (Function::iterator bi = allFunc[i]->begin(); bi != allFunc[i]->end(); bi++) {
-			BasicBlock * bb = bi;
+		for (Function::iterator bi = allFunc[i]->begin(),
+								be = allFunc[i]->end();
+				bi != be; ++bi) {
+			BasicBlock *bb = bi;
 			TerminatorInst *term = NULL;
-			for (BasicBlock::iterator ii = bb->begin(); ii != bb->end(); ii++) {
+			for (BasicBlock::iterator ii = bb->begin(), ie = bb->end();
+					ii != ie; ++ii) {
 				Instruction *inst = ii;
 				if (isa<TerminatorInst>(inst)) {
 					term = dyn_cast<TerminatorInst>(inst);
@@ -402,7 +407,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 				error("term cannot be null");
 			}
 
-			while (1) {
+			while (true) {
 				Instruction *last = &bb->getInstList().back();
 				if (isa<TerminatorInst>(last))
 					break;
@@ -412,9 +417,11 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	}
 
 	cout << "begin to delete loop" << endl;
-	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end(); ii != ie; ii = i_next) {
+		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end();
+				ii != ie; ii = i_next) {
 			i_next = ii;
 			++i_next;
 			Instruction &inst = *ii;
@@ -423,19 +430,17 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 		}
 	}
 
-	// Delete the basic blocks only afterwards, so later backwards branches don't break
-	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end(); bi != be; ++bi) {
+	// Delete the basic blocks only afterwards
+	// so that backwards branch instructions don't break
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
 		BB->eraseFromParent();
 	}
 
 	LPM.deleteLoopFromQueue(L);
 
-	for (int i = 0; i < MAX_THREAD; i++) {
-//		allFunc[i]->dump();
-	}
-	cout << "other stuff" << endl;
-
+	cout << "clearing metadata" << endl;
 	pdg.clear();
 	rev.clear();
 	dag.clear();
@@ -458,7 +463,6 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	defin.clear();
 	liveout.clear();
 	dname.clear();
-	//cout << Type::getInt8PtrTy(*context, 0)->
 }
 
 
@@ -468,10 +472,12 @@ void DSWP::getLiveinfo(Loop * L) {
 	liveout.clear();
 
 	//currently I don't want to use standard liveness analysis
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi
-			!= L->getBlocks().end(); bi++) {
+	for (Loop::block_iterator bi = L->getBlocks().begin(),
+							  be = L->getBlocks().end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
+		for (BasicBlock::iterator ui = BB->begin(), ue = BB->end();
+				ui != ue; ++ui) {
 			Instruction *inst = &(*ui);
 			if (util.hasNewDef(inst)) {
 				defin.push_back(inst);
