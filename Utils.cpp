@@ -12,11 +12,11 @@ string itoa(int i) {
 }
 
 void error(const char *info) {
-	printf("%s\n", info);
+	printf("ERROR: %s\n", info);
 }
 
 void error(string info) {
-	printf("%s\n", info.c_str());
+    error(info.c_str());
 }
 
 int Utils::id = 0;
