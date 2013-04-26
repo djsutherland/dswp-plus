@@ -47,10 +47,8 @@ valgrind/%: Example/%.bc DSWP.so
 ### (dis)assembling bitcode
 Example/%.bc.ll: Example/%.bc
 	llvm-dis $< -o $@
-Example/%-DSWP.out: Example/%-DSWP.bc runtime/libruntime.a
-	clang -pthread $< runtime/libruntime.a -o $@
 Example/%.out: Example/%.bc
-	clang -O0 $< -o $@
+	clang -O0 -pthread $< runtime/libruntime.a -o $@
 time/%: Example/%.out
 	time $<
 
