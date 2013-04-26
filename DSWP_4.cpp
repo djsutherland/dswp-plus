@@ -272,12 +272,13 @@ void DSWP::loopSplit(Loop *L) {
 
 							// if we branched to a block not in this thread,
 							// go to the next post-dominator
+							// NOTE: right?
 							while (newBB == NULL) {
 								oldBB = pre[oldBB];
 								newBB = BBMap[oldBB];
 							}
 
-							//replace the target block
+							// replace the target block
 							newInst->setOperand(j, newBB);
 
 							// TODO check if there are two branch, one branch
@@ -296,7 +297,7 @@ void DSWP::loopSplit(Loop *L) {
 		}
 
 		/*
-		 * Insert load instruction to load argument, (replace the live in variables)
+		 * Load the arguments, replacing variables that are live at the start
 		 */
 		Function::ArgumentListType &arglist = curFunc->getArgumentList();
 		if (arglist.size() != 1) {
@@ -305,43 +306,39 @@ void DSWP::loopSplit(Loop *L) {
 		Argument *args = arglist.begin(); //the function only have one argmument
 
 		Function *showPlace = module->getFunction("showPlace");
-		vector<Value *> placeArg;
-		CallInst *inHeader = CallInst::Create(showPlace, placeArg);
+		CallInst *inHeader = CallInst::Create(showPlace);
 		inHeader->insertBefore(newToHeader);
 
-		BitCastInst *castArgs = new BitCastInst(args, PointerType::get(
-				Type::getInt64Ty(*context), 0));
+		BitCastInst *castArgs = new BitCastInst(
+				args, PointerType::get(Type::getInt64Ty(*context), 0));
 		castArgs->insertBefore(newToHeader);
 
-		for (unsigned j = 0; j < livein.size(); j++) {
-			cout << livein[j]->getName().str() << endl;
+		for (unsigned int j = 0, je = livein.size(); j < je; j++) {
+			cout << "Handling argument: " << livein[j]->getName().str() << endl;
 
-			ConstantInt* idx = ConstantInt::get(Type::getInt64Ty(*context),
-					(uint64_t) j);
-			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(castArgs, idx, ""); //get the element ptr
+			// get pointer to the jth argument
+			ConstantInt* idx = ConstantInt::get(
+					Type::getInt64Ty(*context), (uint64_t) j);
+			GetElementPtrInst* ele_addr =
+					GetElementPtrInst::Create(castArgs, idx, "");
 			ele_addr->insertBefore(newToHeader);
-			LoadInst * ele_val = new LoadInst(ele_addr);
+
+			// load it
+			LoadInst *ele_val = new LoadInst(ele_addr);
 			ele_val->setAlignment(8);
 			ele_val->setName(livein[j]->getName().str() + "_val");
 			ele_val->insertBefore(newToHeader);
 
-//			BitCastInst *addcast = new BitCastInst(ele_addr, Type::getInt8PtrTy(*context));
-//			addcast->insertBefore(newToHeader);
-//			vector<Value *> showArg2;
-//			showArg2.push_back(addcast);
-//			Function *showptr = module->getFunction("showPtr");
-//			CallInst *callShowptr = CallInst::Create(showptr, showArg2.begin(), showArg2.end());
-//			callShowptr->insertBefore(newToHeader);
-//
+			// debug: show the value
 			vector<Value *> showArg;
 			showArg.push_back(ele_val);
 			Function *show = module->getFunction("showValue");
 			CallInst *callShow = CallInst::Create(show, showArg);
 			callShow->insertBefore(newToHeader);
 
+			// cast it to the appropriate type
 			Value *val = livein[j];
 			CastInst *ele_cast;
-
 			if (val->getType()->isIntegerTy()) {
 				ele_cast = new TruncInst(ele_val, val->getType());
 			} else if (val->getType()->isPointerTy()) {
@@ -356,49 +353,34 @@ void DSWP::loopSplit(Loop *L) {
 				error("what's the hell of the type");
 				//ele_cast  = new BitCastInst(ele_val, val->getType());
 			}
-
 			ele_cast->insertBefore(newToHeader);
 			instMap[i][val] = ele_cast;
 		}
 
 		/*
-		 * Replace the use of intruction def in the function (reg dep should be finshied in insert syn
+		 * Replace the use of intruction def in the function.
+		 * reg dep should be finished in insert syn
 		 */
-		for (inst_iterator ii = inst_begin(curFunc); ii != inst_end(curFunc); ii++) {
+		for (inst_iterator ii = inst_begin(curFunc), ie = inst_end(curFunc);
+				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
-			for (unsigned j = 0; j < inst->getNumOperands(); j++) {
+			// TODO: handle phi nodes here
+			for (unsigned int j = 0, je = inst->getNumOperands(); j < je; ++j) {
 				Value *op = inst->getOperand(j);
 
 				if (isa<BasicBlock>(op))
 					continue;
 
-				if (Value * newArg = instMap[i][op]) {
-					//cout << "Asdfa" << endl;
+				if (Value *newArg = instMap[i][op]) {
 					inst->setOperand(j, newArg);
 				}
 			}
 		}
-
-		//curFunc->dump();
 	}
-
-	/*
-	 * Insert Syn to gurantee
-	 */
-
-	//cout << "test_now" << endl;
-
-	//insert store instruction (store register value to memory), now I insert them into the beginning of the function
-	//	Instruction *allocPos = func->getEntryBlock().getTerminator();
-	//
-	//	vector<StoreInst *> stores;
-	//	for (set<Value *>::iterator vi = defin.begin(); vi != defin.end(); vi++) {	//TODO: is defin enough
-	//		Value *val = *vi;
-	//		AllocaInst * arg = new AllocaInst(val->getType(), 0, val->getName().str() + "_ptr", allocPos);
-	//		varToMem[val] = arg;
-	//	}
 }
 
+
+// note that despite being in step 4, this is actually called after step 5
 void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 
 	/*
@@ -478,6 +460,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	dname.clear();
 	//cout << Type::getInt8PtrTy(*context, 0)->
 }
+
 
 void DSWP::getLiveinfo(Loop * L) {
 	defin.clear();

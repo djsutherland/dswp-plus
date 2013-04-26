@@ -6,7 +6,6 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::insertSynchronization(Loop *L) {
-	//this->insertSynDependecy(L);
 	cout << "inserting sychronization" << endl;
 	int channel = 0;
 
@@ -16,7 +15,6 @@ void DSWP::insertSynchronization(Loop *L) {
 //		int t2 = assigned[sccId[e.v]];
 //		if (t1 == t2)	//they are in same thread, therefore no need to syn
 //			continue;
-
 
 		for (int utr = 0; utr < MAX_THREAD; utr++) {
 			for (int vtr = 0; vtr < MAX_THREAD; vtr++) {

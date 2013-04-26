@@ -6,18 +6,20 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::threadPartition(Loop *L) {
-	//1. get total latency and latency for
-
 	assigned.clear();
 	sccLatency.clear();
 
+	/* get total latencies for each SCC */
 	int totalLatency = 0;
-
 	for (int i = 0; i < sccNum; i++)
 		sccLatency.push_back(0);
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
+
+	for (Loop::block_iterator bi = L->getBlocks().begin(),
+							  be = L->getBlocks().end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ii = BB->begin(); ii != BB->end(); ii++) {
+		for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
+				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
 			int latency = getLatency(inst);
 			sccLatency[sccId[inst]] += latency;
@@ -48,7 +50,8 @@ void DSWP::threadPartition(Loop *L) {
 			QNode top = Q.top(); Q.pop();
 			assigned[top.u] = i;
 			estLatency[i] += top.latency;
-			//update the list
+
+			// update the list
 			for (unsigned j = 0; j < dag[top.u]->size(); j++) {
 				int v = dag[top.u]->at(j);
 				if (assigned[v] > -2)
@@ -56,29 +59,21 @@ void DSWP::threadPartition(Loop *L) {
 				assigned[v] = -1;
 				Q.push(QNode(v, sccLatency[v]));
 			}
-			//check load balance
+
+			// check load balance
 			if (estLatency[i] >= averLatency && i != MAX_THREAD - 1) {
-			//	cout << estLatency[i] << endl;
+				// we've filled up this thread, and we're not already on
+				// the last one.
 				break;
 			}
-			// TODO: think this breaks ties arbitrarily (maybe in insertion order?), while
-			// the original paper broke ties by choosing the one that results in fewest
-			// outgoing dependencies.
+
+			// TODO: think this breaks ties arbitrarily (maybe in insertion
+			// order?), while the original paper broke ties by choosing the one
+			// that results in fewest outgoing dependencies.
 		}
 	}
-	//following is impossible since every time I let it bigger that aver
-	// ^ because it doesn't divide evenly... - DJS
-//	if (!Q.empty()) {
-//		error("queue should be empty!");
-//	}
 
-	//// this is now done in the loop above, because this didn't continue
-	//// to add statements to the queue
-	// while (!Q.empty()) {
-	// 	assigned[Q.top().u] = MAX_THREAD - 1;
-	// 	Q.pop();
-	// }
-
+	// fill the "part" arrays with the assignments of SCCs
 	for (int i = 0; i < MAX_THREAD; i++)
 		part[i].clear();
 
@@ -87,18 +82,19 @@ void DSWP::threadPartition(Loop *L) {
 			// not in the queue (eg an unconditional branch)
 			// TODO: should verify that it's okay...
 		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
-			cout << "scc " << i << " assigned to " << assigned[i] << " (bad!)" << endl;
+			error("scc " + itoa(i) + " assigned to " + itoa(assigned[i]));
 		} else {
 			part[assigned[i]].push_back(i);
 		}
 	}
 
+	// debug: print number of SCCs assigned to each thread
 	for (int i = 0; i < MAX_THREAD; i++) {
 		cout << "part " << i << " size: " << part[i].size() << endl;
 	}
 }
 
-int DSWP::getLatency(Instruction *I) {	//Instruction Latency for Core 2, 65nm
+int DSWP::getLatency(Instruction *I) {	// Instruction Latency for Core 2, 65nm
 	int opcode = I->getOpcode();
 	int cost;
     switch (opcode) {
