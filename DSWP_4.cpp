@@ -252,8 +252,6 @@ void DSWP::loopSplit(Loop *L) {
 					newInst->setName(inst->getName() + "_" + itoa(i));
 				}
 
-				// TODO: handle phi nodes here
-
 				// re-point branches and such to new blocks
 				if (isa<TerminatorInst>(newInst)) {
 					// re-point any successor blocks
@@ -284,6 +282,33 @@ void DSWP::loopSplit(Loop *L) {
 
 							// TODO check if there are two branch, one branch
 							// is not in the partition, then what the branch
+						}
+					}
+				}
+				else if (PHINode *phi = dyn_cast<PHINode>(newInst)) {
+					// re-point block predecessors of phi nodes
+					// values will be re-pointed later on
+					for (unsigned int j = 0, je = phi->getNumIncomingValues();
+							j < je; j++) {
+						BasicBlock *oldBB = phi->getIncomingBlock(j);
+						BasicBlock *newBB = BBMap[oldBB];
+
+						// if we're branching from a block not in this thread,
+						// go to the previous dominator of that block
+						// NOTE: is this the right thing to do?
+						/*
+						while (newBB == NULL) {
+							oldBB = pre_dominator[oldBB];
+							newBB = BBMap[oldBB];
+						}
+						*/
+						// TODO: need pre-dominator info
+						if (newBB == NULL) {
+							error("whoops, gotta get dominators");
+						}
+						else {
+						// replace the previous target block
+						phi->setIncomingBlock(j, newBB);
 						}
 					}
 				}
