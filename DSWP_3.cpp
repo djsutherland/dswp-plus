@@ -6,13 +6,10 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::threadPartition(Loop *L) {
-	assigned.clear();
-	sccLatency.clear();
-
 	/* get total latencies for each SCC */
 	int totalLatency = 0;
-	for (int i = 0; i < sccNum; i++)
-		sccLatency.push_back(0);
+	sccLatency.clear();
+	sccLatency.resize(sccNum, 0);
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 							  be = L->getBlocks().end();
@@ -31,16 +28,15 @@ void DSWP::threadPartition(Loop *L) {
 
 	cout << "latency info:" << totalLatency << " " << averLatency << endl;
 
-	for (int i = 0; i < sccNum; i++)
-		assigned.push_back(-2);
-	//-2: not assigned, and not in queue
-	//-1: not assigned, but in queue
-	//0 ~ MAX_THREAD, already been assigned, not in queue
+	assigned.clear();
+	assigned.resize(sccNum, -2);
+	// -2: not assigned, and not in queue
+	// -1: not assigned, but in queue
+	// 0 <= i < MAX_THREAD: already been assigned, not in queue
 
 	int estLatency[MAX_THREAD] = {};
 
-	//TODO NOT SURE HERE IS RIGHT! header vs. preheader
-	int start = sccId[L->getHeader()->getFirstNonPHI()];
+	int start = sccId[header->getFirstNonPHI()];
 
 	priority_queue<QNode> Q;
 	Q.push(QNode(start, sccLatency[start]));
@@ -52,12 +48,12 @@ void DSWP::threadPartition(Loop *L) {
 			estLatency[i] += top.latency;
 
 			// update the list
-			for (unsigned j = 0; j < dag[top.u]->size(); j++) {
+			for (unsigned int j = 0, je = dag[top.u]->size(); j < je; ++j) {
 				int v = dag[top.u]->at(j);
-				if (assigned[v] > -2)
-					continue;
-				assigned[v] = -1;
-				Q.push(QNode(v, sccLatency[v]));
+				if (assigned[v] == -2) {
+					assigned[v] = -1;
+					Q.push(QNode(v, sccLatency[v]));
+				}
 			}
 
 			// check load balance
@@ -81,6 +77,7 @@ void DSWP::threadPartition(Loop *L) {
 		if (assigned[i] == -2) {
 			// not in the queue (eg an unconditional branch)
 			// TODO: should verify that it's okay...
+			cout << "not assigning SCC " << i << endl;
 		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
 			error("scc " + itoa(i) + " assigned to " + itoa(assigned[i]));
 		} else {
