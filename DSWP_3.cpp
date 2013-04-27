@@ -36,10 +36,13 @@ void DSWP::threadPartition(Loop *L) {
 
 	int estLatency[MAX_THREAD] = {};
 
-	int start = sccId[header->getFirstNonPHI()];
-
+	// keep a queue of candidate SCCs whose predecessors have all been scheduled
 	priority_queue<QNode> Q;
-	Q.push(QNode(start, sccLatency[start]));
+	for (unsigned int scc = 0; scc < sccNum; scc++) {
+		if (scc_parents[scc]->empty()) {
+			Q.push(QNode(scc, sccLatency[scc]));
+		}
+	}
 
 	for (int i = 0; i < MAX_THREAD; i++) {
 		while (!Q.empty()) {
@@ -47,19 +50,33 @@ void DSWP::threadPartition(Loop *L) {
 			assigned[top.u] = i;
 			estLatency[i] += top.latency;
 
-			// update the list
-			for (unsigned int j = 0, je = scc_dependents[top.u]->size(); j < je; ++j) {
-				int v = scc_dependents[top.u]->at(j);
+			// update the queue: add any children whose parents have now all
+			// been scheduled
+			const vector<int> &deps = *scc_dependents[top.u];
+			for (vector<int>::const_iterator j = deps.begin(), je = deps.end();
+					j != je; ++j) {
+				int v = *j;
 				if (assigned[v] == -2) {
-					assigned[v] = -1;
-					Q.push(QNode(v, sccLatency[v]));
+					bool can_sched = true;
+					const vector<int> &pars = *scc_parents[v];
+					for (vector<int>::const_iterator k = pars.begin(),
+											         ke = pars.end();
+							k != ke; ++k) {
+						if (assigned[*k] < 0) {
+							can_sched = false;
+							break;
+						}
+					}
+					if (can_sched) {
+						Q.push(QNode(v, sccLatency[v]));
+					}
 				}
 			}
 
 			// check load balance
 			if (estLatency[i] >= averLatency && i != MAX_THREAD - 1) {
-				// we've filled up this thread, and we're not already on
-				// the last one.
+				// we've filled up this thread, so move on.
+				// don't do this for the last one, so everything gets scheduled.
 				break;
 			}
 
@@ -74,11 +91,7 @@ void DSWP::threadPartition(Loop *L) {
 		part[i].clear();
 
 	for (int i = 0; i < sccNum; i++) {
-		if (assigned[i] == -2) {
-			// not in the queue (eg an unconditional branch)
-			// TODO: should verify that it's okay...
-			cout << "not assigning SCC " << i << endl;
-		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
+		if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
 			error("scc " + itoa(i) + " assigned to " + itoa(assigned[i]));
 		} else {
 			part[assigned[i]].push_back(i);
