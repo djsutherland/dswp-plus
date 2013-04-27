@@ -216,6 +216,7 @@ void DSWP::loopSplit(Loop *L) {
 			BBMap[BB] = BasicBlock::Create(*context,
 					BB->getName().str() + "_" + itoa(i), curFunc, newExit);
 		}
+		BBMap[predecessor] = newEntry;
 		BBMap[exit] = newExit;
 
 		if (BBMap[header] == NULL) {
