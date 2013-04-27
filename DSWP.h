@@ -109,6 +109,9 @@ private:
 	//the father node for each block in post dominator tree
 	map<BasicBlock *, BasicBlock *> pre;
 
+	// the immediate dominator and postdominator for each basic block
+	map<BasicBlock *, BasicBlock *> idom, postidom;
+
 	//total number of scc
 	int sccNum;
 
@@ -158,6 +161,9 @@ private:
 
 	//the new functions (has already been inserted, waiting for syn)
 	vector<Function *> allFunc;
+
+	// get dominator information
+	void getDominators(Loop *L);
 
 	//get live variable infomration
 	void getLiveinfo(Loop * L);

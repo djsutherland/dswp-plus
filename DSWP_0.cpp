@@ -135,6 +135,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	showPartition(L);
 	getLiveinfo(L);
 	showLiveInfo(L);
+	getDominators(L);
 	// TODO: should estimate whether splitting was helpful and if not, return
 	//       the unmodified code (like in the paper)
 	preLoopSplit(L);
