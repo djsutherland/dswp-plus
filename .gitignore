@@ -2,6 +2,7 @@
 *.a
 *.o
 *.o.ll
+*.d
 *.bc
 *.bc.ll
 *.out
