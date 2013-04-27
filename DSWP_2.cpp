@@ -31,7 +31,6 @@ void DSWP::findSCC(Loop *L) {
 		Instruction *inst = list[i];
 		if (!used[inst]) {
 			InstInSCC.push_back(vector<Instruction *>()); //Allocate instr. list
-			dag[sccNum] = new vector<int>(); //Allocate DAG adj. list for ith SCC
 			dfs_reverse(inst);
 			sccNum++;
 		}
@@ -72,7 +71,8 @@ void DSWP::dfs_reverse(Instruction *I) {
 			std::pair<int, int> sccedge = std::make_pair(u, sccNum);
 			if (!dag_added[sccedge]) { //No edge between two SCCs yet
 				//Add the edge
-				dag[u]->push_back(sccNum);
+				scc_dependents[u].push_back(sccNum);
+				scc_parents[sccNum].push_back(u);
 				dag_added[sccedge] = true;
 			}
 		}

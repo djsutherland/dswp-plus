@@ -6,13 +6,10 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::threadPartition(Loop *L) {
-	assigned.clear();
-	sccLatency.clear();
-
 	/* get total latencies for each SCC */
 	int totalLatency = 0;
-	for (int i = 0; i < sccNum; i++)
-		sccLatency.push_back(0);
+	sccLatency.clear();
+	sccLatency.resize(sccNum, 0);
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 							  be = L->getBlocks().end();
@@ -31,19 +28,21 @@ void DSWP::threadPartition(Loop *L) {
 
 	cout << "latency info:" << totalLatency << " " << averLatency << endl;
 
-	for (int i = 0; i < sccNum; i++)
-		assigned.push_back(-2);
-	//-2: not assigned, and not in queue
-	//-1: not assigned, but in queue
-	//0 ~ MAX_THREAD, already been assigned, not in queue
+	assigned.clear();
+	assigned.resize(sccNum, -2);
+	// -2: not assigned, and not in queue
+	// -1: not assigned, but in queue
+	// 0 <= i < MAX_THREAD: already been assigned, not in queue
 
 	int estLatency[MAX_THREAD] = {};
 
-	//TODO NOT SURE HERE IS RIGHT! header vs. preheader
-	int start = sccId[L->getHeader()->getFirstNonPHI()];
-
+	// keep a queue of candidate SCCs whose predecessors have all been scheduled
 	priority_queue<QNode> Q;
-	Q.push(QNode(start, sccLatency[start]));
+	for (unsigned int scc = 0; scc < sccNum; scc++) {
+		if (scc_parents[scc].empty()) {
+			Q.push(QNode(scc, sccLatency[scc]));
+		}
+	}
 
 	for (int i = 0; i < MAX_THREAD; i++) {
 		while (!Q.empty()) {
@@ -51,19 +50,33 @@ void DSWP::threadPartition(Loop *L) {
 			assigned[top.u] = i;
 			estLatency[i] += top.latency;
 
-			// update the list
-			for (unsigned j = 0; j < dag[top.u]->size(); j++) {
-				int v = dag[top.u]->at(j);
-				if (assigned[v] > -2)
-					continue;
-				assigned[v] = -1;
-				Q.push(QNode(v, sccLatency[v]));
+			// update the queue: add any children whose parents have now all
+			// been scheduled
+			const vector<int> &deps = scc_dependents[top.u];
+			for (vector<int>::const_iterator j = deps.begin(), je = deps.end();
+					j != je; ++j) {
+				int v = *j;
+				if (assigned[v] == -2) {
+					bool can_sched = true;
+					const vector<int> &pars = scc_parents[v];
+					for (vector<int>::const_iterator k = pars.begin(),
+											         ke = pars.end();
+							k != ke; ++k) {
+						if (assigned[*k] < 0) {
+							can_sched = false;
+							break;
+						}
+					}
+					if (can_sched) {
+						Q.push(QNode(v, sccLatency[v]));
+					}
+				}
 			}
 
 			// check load balance
 			if (estLatency[i] >= averLatency && i != MAX_THREAD - 1) {
-				// we've filled up this thread, and we're not already on
-				// the last one.
+				// we've filled up this thread, so move on.
+				// don't do this for the last one, so everything gets scheduled.
 				break;
 			}
 
@@ -78,10 +91,7 @@ void DSWP::threadPartition(Loop *L) {
 		part[i].clear();
 
 	for (int i = 0; i < sccNum; i++) {
-		if (assigned[i] == -2) {
-			// not in the queue (eg an unconditional branch)
-			// TODO: should verify that it's okay...
-		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
+		if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
 			error("scc " + itoa(i) + " assigned to " + itoa(assigned[i]));
 		} else {
 			part[assigned[i]].push_back(i);
@@ -97,137 +107,86 @@ void DSWP::threadPartition(Loop *L) {
 int DSWP::getLatency(Instruction *I) {	// Instruction Latency for Core 2, 65nm
 	int opcode = I->getOpcode();
 	int cost;
-    switch (opcode) {
-        // Terminator instructions
-        case 1: cost=1; break;          // Return
-        case 2: cost=0; break;          // Branc
-        case 3: cost=0; break;          // Switch
+	switch (opcode) {
+		// Terminator instructions
+		case Instruction::Ret:    cost=1; break;
+		case Instruction::Br:     cost=0; break;
+		case Instruction::Switch: cost=0; break;
 
-                // Standard binary operators
-        case 8: cost=1; break;          // Add
-        case 9: cost=4; break;          // FAdd
-        case 10: cost=1; break;         // Sub
-        case 11: cost=4; break;         // FSub
-        case 12: cost=3; break;         // Mul
-        case 13: cost=4; break;         // FMul
-        case 14: cost=17; break;        // UDiv
-        case 15: cost=17; break;        // SDiv
-        case 16: cost=24; break;        // FDiv
-        case 17: cost=17; break;        // URem
-        case 18: cost=17; break;        // SRem
-        case 19: cost=24; break;        // FRem
+		// Standard binary operators
+		case Instruction::Add:  cost=1; break;
+		case Instruction::FAdd: cost=4; break;
+		case Instruction::Sub:  cost=1; break;
+		case Instruction::FSub: cost=4; break;
+		case Instruction::Mul:  cost=3; break;
+		case Instruction::FMul: cost=4; break;
+		case Instruction::UDiv: cost=17; break;
+		case Instruction::SDiv: cost=17; break;
+		case Instruction::FDiv: cost=24; break;
+		case Instruction::URem: cost=17; break;
+		case Instruction::SRem: cost=17; break;
+		case Instruction::FRem: cost=24; break;
 
-                 // logical operators (integer operands)
-        case 20: cost=7; break;         // Shift left
-        case 21: cost=7; break;         // Shift right
-        case 22: cost=7; break;         // Shifr right (arithmetic)
-        case 23: cost=1; break;         // And
-        case 24: cost=1; break;         // Or
-        case 25: cost=1; break;         // Xor
+		// logical operators (integer operands)
+		case Instruction::Shl:  cost=7; break;
+		case Instruction::LShr: cost=7; break;
+		case Instruction::AShr: cost=7; break;
+		case Instruction::And:  cost=1; break;
+		case Instruction::Or:   cost=1; break;
+		case Instruction::Xor:  cost=1; break;
 
-                 // Memory ops
-                case 26: cost=2; break;         // Alloca
-        case 27: cost=2; break;         // Load
-        case 28: cost=2; break;         // Store
-        case 29: cost=1; break;         // GetElementPtr
+		// Vector ops
+		case Instruction::ExtractElement: cost=0; break; // TODO
+		case Instruction::InsertElement:  cost=0; break; // TODO
+		case Instruction::ShuffleVector:  cost=0; break; // TODO
 
-                 // Cast operators
-        case 30: cost=1; break;         // Truncate integers
-        case 31: cost=1; break;         // Zero extend integers
-        case 32: cost=1; break;         // Sign extend integers
-        case 33: cost=4; break;         // FPtoUI
-        case 34: cost=4; break;         // FPtoSI
-        case 35: cost=4; break;         // UItoFP
-        case 36: cost=4; break;         // SItoFP
-        case 37: cost=4; break;         // FPTrunc
-        case 38: cost=4; break;         // FPExt
-        case 39: cost=2; break;         // PtrToInt
-        case 40: cost=2; break;         // IntToPtr
-        case 41: cost=1; break;         // Type cast
+		// Aggregate ops
+		case Instruction::ExtractValue: cost=0; break; // TODO
+		case Instruction::InsertValue:  cost=0; break; // TODO
 
-                 // Other
-        case 42: cost=1; break;         // Integer compare
-        case 43: cost=1; break;         // Float compare
-        case 44: cost=1; break;         // PHI node
-        case 45: cost=50; break;        // Call function (this one is really variable)
+		// Memory ops
+		case Instruction::Alloca:        cost=2; break;
+		case Instruction::Load:          cost=2; break;
+		case Instruction::Store:         cost=2; break;
+		case Instruction::Fence:         cost=0; break; // TODO
+		case Instruction::AtomicCmpXchg: cost=0; break; // TODO
+		case Instruction::AtomicRMW:     cost=0; break; // TODO
+		case Instruction::GetElementPtr: cost=1; break;
 
-        default: cost=1;
-    }
+		// Cast operators
+		case Instruction::Trunc:    cost=1; break;
+		case Instruction::ZExt:     cost=1; break;
+		case Instruction::SExt:     cost=1; break;
+		case Instruction::FPTrunc:  cost=4; break;
+		case Instruction::FPExt:    cost=4; break;
+		case Instruction::FPToUI:   cost=4; break;
+		case Instruction::FPToSI:   cost=4; break;
+		case Instruction::UIToFP:   cost=4; break;
+		case Instruction::SIToFP:   cost=4; break;
+		case Instruction::PtrToInt: cost=2; break;
+		case Instruction::IntToPtr: cost=2; break;
+		case Instruction::BitCast:  cost=1; break;
 
-    return (cost);
+		// Other
+		case Instruction::ICmp:       cost=1; break;
+		case Instruction::FCmp:       cost=1; break;
+		case Instruction::PHI:        cost=1; break;
+		case Instruction::Select:     cost=0; break; // TODO
+		case Instruction::Call:       cost=50; break; // really variable...
+		case Instruction::VAArg:      cost=0; break; // TODO
+		case Instruction::LandingPad: cost=0; break; // TODO
+
+		default: cost=1;
+	}
+
+	return cost;
 }
 
-
-//int DSWP::getLatency(Instruction *I) {
-//	int opcode = I->getOpcode();
-//
-//	//copy from dswp583 google project site TODO this table is obviously not right!
-//	int cost;
-//    // These are instruction latencies for an AMD K10
-//    // (Well, most of them are, some I just made up)
-//    switch (opcode) {
-//        // Terminator instructions
-//        case 1: cost=2; break;          // Return
-//        case 2: cost=3; break;          // Branch   //TODO NOT RIGHT
-//        case 3: cost=3; break;          // Switch
-//
-//                // Standard binary operators
-//        case 8: cost=1; break;          // Add
-//        case 9: cost=4; break;          // FAdd
-//        case 10: cost=1; break;         // Sub
-//        case 11: cost=4; break;         // FSub
-//        case 12: cost=3; break;         // Mul
-//        case 13: cost=4; break;         // FMul
-//        case 14: cost=17; break;        // UDiv
-//        case 15: cost=17; break;        // SDiv
-//        case 16: cost=24; break;        // FDiv
-//        case 17: cost=17; break;        // URem
-//        case 18: cost=17; break;        // SRem
-//        case 19: cost=24; break;        // FRem
-//
-//                 // logical operators (integer operands)
-//        case 20: cost=7; break;         // Shift left
-//        case 21: cost=7; break;         // Shift right
-//        case 22: cost=7; break;         // Shifr right (arithmetic)
-//        case 23: cost=1; break;         // And
-//        case 24: cost=1; break;         // Or
-//        case 25: cost=1; break;         // Xor
-//
-//                 // Memory ops
-//                case 26: cost=2; break;         // Alloca
-//        case 27: cost=2; break;         // Load
-//        case 28: cost=2; break;         // Store
-//        case 29: cost=1; break;         // GetElementPtr
-//
-//                 // Cast operators
-//        case 30: cost=1; break;         // Truncate integers
-//        case 31: cost=1; break;         // Zero extend integers
-//        case 32: cost=1; break;         // Sign extend integers
-//        case 33: cost=4; break;         // FPtoUI
-//        case 34: cost=4; break;         // FPtoSI
-//        case 35: cost=4; break;         // UItoFP
-//        case 36: cost=4; break;         // SItoFP
-//        case 37: cost=4; break;         // FPTrunc
-//        case 38: cost=4; break;         // FPExt
-//        case 39: cost=2; break;         // PtrToInt
-//        case 40: cost=2; break;         // IntToPtr
-//        case 41: cost=1; break;         // Type cast
-//
-//                 // Other
-//        case 42: cost=1; break;         // Integer compare
-//        case 43: cost=1; break;         // Float compare
-//        case 44: cost=1; break;         // PHI node
-//        case 45: cost=50; break;        // Call function (this one is really variable)
-//
-//        default: cost=1;
-//    }
-//
-//    return (cost);
-//}
 
 int DSWP::getInstAssigned(Value *inst) {
 	return assigned[sccId[dyn_cast<Instruction>(inst)]];
 }
+
 
 int DSWP::getNewInstAssigned(Value *inst) {
 	if (isa<TerminatorInst>(inst)) {

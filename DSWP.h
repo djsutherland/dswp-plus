@@ -97,10 +97,14 @@ private:
 	map<Instruction *, vector<Edge> *> pdg;
 	//reverse graph for scc
 	map<Instruction *, vector<Edge> *> rev;
-	//dag
-	map<int, vector<int> *> dag;
+
+	// DAG of the SCC relationships
+	map<int, vector<int> > scc_dependents;
+	map<int, vector<int> > scc_parents;
+
 	//edge lookup for SCC dag
 	map<std::pair<int, int>, bool> dag_added;
+
 	//edge table, all the dependency relationship
 	vector<Edge> allEdges;
 
