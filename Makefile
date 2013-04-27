@@ -1,12 +1,15 @@
-CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
+CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0 -MMD
 .PHONY: all runtime-tests gdb/% valgrind/% time/% \
 		tidy clean clean-examples
 
 all: DSWP.so runtime/libruntime.a
 
+OBJS = DSWP_0.o DSWP_1.o DSWP_2.o DSWP_3.o DSWP_4.o DSWP_5.o DSWP_DEBUG.o \
+	   DFAFramework.o DFAValue.o LivenessAnalysis.o Utils.o raw_os_ostream.o
+-include $(OBJS:%.o=%.d)
+
 ### the main pass
-DSWP.so: DSWP_0.o DSWP_1.o DSWP_2.o DSWP_3.o DSWP_4.o DSWP_5.o DSWP_DEBUG.o \
-	     DFAFramework.o DFAValue.o LivenessAnalysis.o Utils.o raw_os_ostream.o
+DSWP.so: $(OBJS)
 	$(CXX) -dylib -flat_namespace -shared -g -O0  $^ -o $@
 # We're including raw_os_ostream.o because we can't just link in libLLVMSupport:
 # http://lists.cs.uiuc.edu/pipermail/llvmdev/2010-June/032508.html
@@ -54,7 +57,8 @@ time/%: Example/%.out
 
 ### cleaning up
 tidy:
-	rm -f *.o runtime/*.o runtime/tests/*.o dag partition showgraph
+	rm -f *.o runtime/*.o runtime/tests/*.o *.d runtime/*.d runtime/tests/*.d
+	rm -f dag partition showgraph
 clean-examples:
 	rm -f Example/*.bc Example/*.bc.ll Example/*.out
 clean: tidy clean-examples
