@@ -277,6 +277,10 @@ void DSWP::loopSplit(Loop *L) {
 							while (newBB == NULL) {
 								oldBB = pre[oldBB];
 								newBB = BBMap[oldBB];
+								if (oldBB == NULL) {
+									error("dominator info seems broken :(");
+									break;
+								}
 							}
 
 							// replace the target block
