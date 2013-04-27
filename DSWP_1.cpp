@@ -402,4 +402,7 @@ void DSWP::buildPDG(Loop *L) {
 			}
 		}
 	}
+
+	//Note that our dummy function and its underlying blocks and instructions
+	//will automatically be deleted
 }
