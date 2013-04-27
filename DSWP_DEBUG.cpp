@@ -47,9 +47,9 @@ void DSWP::showDAG(Loop *L) {
 		ost << "\n";
 
 		ost << "\tdependent scc" << ":";
-		vector<int> *edges = this->scc_dependents[i];
-		for (unsigned i = 0; i < edges->size(); i++) {
-			ost << edges->at(i) << " ";
+		const vector<int> &edges = this->scc_dependents[i];
+		for (unsigned i = 0; i < edges.size(); i++) {
+			ost << edges.at(i) << " ";
 		}
 		ost << "\n";
 	}
