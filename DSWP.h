@@ -106,9 +106,6 @@ private:
 
 	vector<vector<Instruction *> > InstInSCC;
 
-	//the father node for each block in post dominator tree
-	map<BasicBlock *, BasicBlock *> pre;
-
 	//total number of scc
 	int sccNum;
 

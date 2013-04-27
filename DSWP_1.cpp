@@ -5,37 +5,6 @@
 using namespace llvm;
 using namespace std;
 
-void DSWP::addControlDependence(BasicBlock *a, BasicBlock *b) {
-	//TODO: dinstingush the loop carried
-
-	Instruction *u = &a->getInstList().back();
-	Instruction *v = b->getFirstNonPHI();
-	addEdge(u, v, CONTROL);
-}
-
-void DSWP::checkControlDependence(BasicBlock *a, BasicBlock *b, PostDominatorTree &pdt) {
-	BasicBlock *lca = pdt.findNearestCommonDominator(a, b);
-
-	cout << a->getName().str() << " " << b->getName().str() << " " << lca->getName().str() << endl;
-
-	if (lca == pre[a]) {	//case 1
-		BasicBlock *BB = b;
-		while (BB != lca) {
-			addControlDependence(a, BB);
-			BB = pre[BB];
-		}
-	} else if (lca == a) {	//case 2: capture loop dependence
-		BasicBlock *BB = b;
-		while (BB != pre[a]) {
-			cout << "\t" << a->getName().str() << " " << BB->getName().str() << endl;
-			addControlDependence(a, BB);
-			BB = pre[BB];
-		}
-	} else {
-		error("unknow case in checkControlDependence!");
-	}
-}
-
 void DSWP::dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
 					std::vector<BasicBlock *> &ord, Loop *L) {
 	vis.insert(BB); //Mark as visited
