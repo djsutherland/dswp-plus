@@ -48,6 +48,11 @@ void DSWP::dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
 
 void DSWP::buildPDG(Loop *L) {
 	cout<<">>Building PDG for new loop"<<endl;
+	BasicBlock *bexit = L->getUniqueExitBlock();
+	if (bexit == NULL)
+		cout<<">>No unique exit block"<<endl;
+	else
+		cout<<">>Unique exit block is "<<bexit->getName().str()<<endl;
 	cout<<">>Enumerating blocks"<<endl;
 	raw_os_ostream outstream(cout);
 
@@ -60,7 +65,7 @@ void DSWP::buildPDG(Loop *L) {
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
 			Instruction *inst = &(*ui);
 
-			//standardlize the name for all expr
+			//standardize the name for all expr
 			if (util.hasNewDef(inst)) {
 				inst->setName(util.genId());
 				dname[inst] = inst->getName().str();
@@ -78,7 +83,7 @@ void DSWP::buildPDG(Loop *L) {
 	//LoopInfo &li = getAnalysis<LoopInfo>();
 
 	/*
-	 * Memory dependency analysis
+	 * Memory dependence analysis
 	 */
 	MemoryDependenceAnalysis &mda = Pass::getAnalysis<MemoryDependenceAnalysis>();
 
@@ -181,9 +186,24 @@ void DSWP::buildPDG(Loop *L) {
 	Function *curfunc = header->getParent();
 	Module *curmodule = curfunc->getParent();
 	LLVMContext *curcontext = &curmodule->getContext();
-	FunctionType *functype = FunctionType::get(Type::getVoidTy(*curcontext), false); 
+	FunctionType *functype = FunctionType::get(Type::getVoidTy(*curcontext),
+											   false);
+	Module newmodule("dummymodule", getGlobalContext());
+	IntegerType *int_arg = IntegerType::get(getGlobalContext(), 32);
+	cout<<">>Trying to create function inside module..."<<endl;
+	Constant *cfunc = newmodule.getOrInsertFunction("dummyloopunroll",
+													Type::getVoidTy(
+													getGlobalContext()),
+													int_arg,
+												   	NULL);
+	cout<<">>Function created!"<<endl;
+	Function *ctrlfunc = cast<Function>(cfunc);
+
+	/*
 	Function *ctrlfunc = Function::Create(functype, Function::ExternalLinkage,
 										  "dummyloopunroll", module);
+	*/
+
 	Function &ctrlfuncref = *ctrlfunc;
 
 	std::set<BasicBlock *> b_visited;
@@ -242,12 +262,36 @@ void DSWP::buildPDG(Loop *L) {
 		} while (it != bb_ordered.begin());
 	}
 
+	//Create the exit block
+	BasicBlock *dummyexitblock = BasicBlock::Create(ctxt,
+													"exitblock", ctrlfunc, 0);
+	ReturnInst::Create(ctxt, 0, dummyexitblock);
+
 	cout<<">>Printing out names of dummy blocks inside our fake function"<<endl;
 	for (Function::iterator FI = ctrlfunc->begin(), FE = ctrlfunc->end();
 		 FI != FE; ++FI) {
 		cout<<(*FI).getName().str()<<", ";
 	}
 	cout<<endl;
+
+	//Find blocks from which the loop may be exited
+	SmallVector<BasicBlock *, 10> bb_exits;
+	std::set<BasicBlock *> returnblocks;
+
+	L->getUniqueExitBlocks(bb_exits);
+	for (SmallVector<BasicBlock *, 10>::iterator it = bb_exits.begin(),
+			 ie = bb_exits.end(); it != ie; ++it) {
+		BasicBlock *bbend = *it;
+		for (pred_iterator pi = pred_begin(bbend), pe = pred_end(bbend);
+				pi != pe; ++pi) {
+			if (L->contains(*pi)) //block in loop?
+				if (returnblocks.find(*pi) == returnblocks.end()) //to insert?
+				{
+					cout<<">>Adding "<<(*pi)->getName().str()<<" as exiting block"<<endl;
+					returnblocks.insert(*pi); //Insert block as a return block
+				}
+		}	
+	}
 
 	//Add branch instructions for dummy blocks
 	if (!bb_ordered.empty()) {
@@ -264,6 +308,29 @@ void DSWP::buildPDG(Loop *L) {
 			unsigned nsucc = tinst->getNumSuccessors();
 			SwitchInst *SI1, *SI2;
 			bool swcreated1 = false, swcreated2 = false; 
+
+			//Deal with exit blocks
+			if (returnblocks.find(*it) != returnblocks.end()) 
+			{
+				SI1 = builder1.CreateSwitch(ConstantInt::get(
+						Type::getInt64Ty(getGlobalContext()), 0),
+						dummyexitblock, nsucc+1);
+				SI2 = builder2.CreateSwitch(ConstantInt::get(
+						Type::getInt64Ty(getGlobalContext()), 0),
+						dummyexitblock, nsucc+1);
+
+				SI1->addCase(ConstantInt::get(
+						Type::getInt64Ty(getGlobalContext()), 0),
+						dummyexitblock);
+				SI2->addCase(ConstantInt::get(
+						Type::getInt64Ty(getGlobalContext()), 0),
+						dummyexitblock);
+
+				swcreated1 = true;
+				swcreated2 = true;
+			}
+
+
 			for (unsigned i = 0; i < nsucc; i++) {
 				BasicBlock *bsucc = tinst->getSuccessor(i);
 
@@ -285,7 +352,7 @@ void DSWP::buildPDG(Loop *L) {
 
 					//Add a case to the switch instruction for the top half
 					SI1->addCase(ConstantInt::get(
-							Type::getInt64Ty(getGlobalContext()), i),
+							Type::getInt64Ty(getGlobalContext()), i+1),
 							destblock1);
 
 					//Now, deal with instruction for bottom half
@@ -298,7 +365,7 @@ void DSWP::buildPDG(Loop *L) {
 
 					//Add a case to the switch instruction for the bottom half
 					SI2->addCase(ConstantInt::get(
-							Type::getInt64Ty(getGlobalContext()), i),
+							Type::getInt64Ty(getGlobalContext()), i+1),
 							destblock2);
 
 				}
@@ -314,13 +381,18 @@ void DSWP::buildPDG(Loop *L) {
 		cout<<endl;
 	}
 
+	cout<<endl<<">>Printing out FUNCTION ctrlfunc:"<<endl;
+	ctrlfunc->print(outstream);
 	/*
 	 *
 	 * Begin control dependence calculation
 	 *
 	 */
 
-	PostDominatorTree &pdt = Pass::getAnalysis<PostDominatorTree>(ctrlfuncref);
+	cout<<">>Attempting to grab postdominator tree..."<<endl;
+	PostDominatorTree pdt;
+	pdt.runOnFunction(ctrlfuncref);
+	cout<<">>Successfully grabbed postdominator tree from the analysis"<<endl;
 
 	for (std::vector<BasicBlock *>::iterator it = dummylist.begin();
 		 it != dummylist.end(); ++it)
@@ -334,19 +406,30 @@ void DSWP::buildPDG(Loop *L) {
 			//Find LCA of two nodes in the post-dominator tree
 			DomTreeNode *succnode = pdt.getNode(bsucc);
 			BasicBlock *realblock = dummytoreal[*it];
-			DomTreeNode *dn = pdt.getNode(pdt.findNearestCommonDominator(*it, bsucc));
+			DomTreeNode *dn = pdt.getNode(pdt.findNearestCommonDominator(*it,
+											bsucc));
+			BasicBlock *depblock = succnode->getBlock();
 
-			//WHAT IF dn IS NULL?
+			//TODO: What if dn is null?
 
-			//As long as the current node is not a post-dominator for *it, add a control
-			//dependence edge and move upward in the post-dominator tree
-			while (succnode != dn)
+			//As long as the current node is not a post-dominator for *it, add
+			//a control dependence edge and move upward in the post-dominator
+			//tree
+			while (succnode != dn && depblock != dummyexitblock)
 			{
-				BasicBlock *depblock = succnode->getBlock();
-				if (realblock != dummytoreal[depblock]) 
-					addEdge(realblock->getTerminator(), depblock->begin(), CONTROL);
+				BasicBlock *realdepblock = dummytoreal[depblock];
+				if (realblock != realdepblock) {
+					cout<<"Adding control edge from [[";
+					realblock->getTerminator()->print(outstream);
+					cout<<"]](in block "<<realblock->getName().str()<<") to [[";
+					realdepblock->begin()->print(outstream);
+					cout<<"]]("<<realdepblock->getName().str()<<")"<<endl;
+					addEdge(realblock->getTerminator(), realdepblock->begin(),
+							CONTROL);
+				}
 
 				succnode = succnode->getIDom();
+				depblock = succnode->getBlock();
 			}
 		}
 	}

@@ -15,6 +15,7 @@
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/IRBuilder.h"
 #include "llvm/LLVMContext.h"
+#include "llvm/DerivedTypes.h"
 #include "LivenessAnalysis.h"
 
 #include "Utils.h"
@@ -68,7 +69,6 @@ private:
 	int loopCounter;
 
 	set<Function *> generated;	//all generated function that should not be run in the pass
-	//
 
 	//part 0
 	void addEdge(Instruction *u, Instruction *v, DType dtype);

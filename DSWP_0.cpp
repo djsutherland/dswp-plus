@@ -110,6 +110,7 @@ void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<PostDominatorTree>();
     AU.addRequired<AliasAnalysis>();
     AU.addRequired<MemoryDependenceAnalysis>();
+	AU.addRequiredTransitive<PostDominatorTree>();
 }
 
 void DSWP::initilize(Loop *L) {
