@@ -6,13 +6,10 @@ using namespace llvm;
 using namespace std;
 
 void DSWP::threadPartition(Loop *L) {
-	assigned.clear();
-	sccLatency.clear();
-
 	/* get total latencies for each SCC */
 	int totalLatency = 0;
-	for (int i = 0; i < sccNum; i++)
-		sccLatency.push_back(0);
+	sccLatency.clear();
+	sccLatency.resize(sccNum, 0);
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 							  be = L->getBlocks().end();
@@ -31,19 +28,21 @@ void DSWP::threadPartition(Loop *L) {
 
 	cout << "latency info:" << totalLatency << " " << averLatency << endl;
 
-	for (int i = 0; i < sccNum; i++)
-		assigned.push_back(-2);
-	//-2: not assigned, and not in queue
-	//-1: not assigned, but in queue
-	//0 ~ MAX_THREAD, already been assigned, not in queue
+	assigned.clear();
+	assigned.resize(sccNum, -2);
+	// -2: not assigned, and not in queue
+	// -1: not assigned, but in queue
+	// 0 <= i < MAX_THREAD: already been assigned, not in queue
 
 	int estLatency[MAX_THREAD] = {};
 
-	//TODO NOT SURE HERE IS RIGHT! header vs. preheader
-	int start = sccId[L->getHeader()->getFirstNonPHI()];
-
+	// keep a queue of candidate SCCs whose predecessors have all been scheduled
 	priority_queue<QNode> Q;
-	Q.push(QNode(start, sccLatency[start]));
+	for (unsigned int scc = 0; scc < sccNum; scc++) {
+		if (scc_parents[scc]->empty()) {
+			Q.push(QNode(scc, sccLatency[scc]));
+		}
+	}
 
 	for (int i = 0; i < MAX_THREAD; i++) {
 		while (!Q.empty()) {
@@ -51,19 +50,33 @@ void DSWP::threadPartition(Loop *L) {
 			assigned[top.u] = i;
 			estLatency[i] += top.latency;
 
-			// update the list
-			for (unsigned j = 0; j < dag[top.u]->size(); j++) {
-				int v = dag[top.u]->at(j);
-				if (assigned[v] > -2)
-					continue;
-				assigned[v] = -1;
-				Q.push(QNode(v, sccLatency[v]));
+			// update the queue: add any children whose parents have now all
+			// been scheduled
+			const vector<int> &deps = *scc_dependents[top.u];
+			for (vector<int>::const_iterator j = deps.begin(), je = deps.end();
+					j != je; ++j) {
+				int v = *j;
+				if (assigned[v] == -2) {
+					bool can_sched = true;
+					const vector<int> &pars = *scc_parents[v];
+					for (vector<int>::const_iterator k = pars.begin(),
+											         ke = pars.end();
+							k != ke; ++k) {
+						if (assigned[*k] < 0) {
+							can_sched = false;
+							break;
+						}
+					}
+					if (can_sched) {
+						Q.push(QNode(v, sccLatency[v]));
+					}
+				}
 			}
 
 			// check load balance
 			if (estLatency[i] >= averLatency && i != MAX_THREAD - 1) {
-				// we've filled up this thread, and we're not already on
-				// the last one.
+				// we've filled up this thread, so move on.
+				// don't do this for the last one, so everything gets scheduled.
 				break;
 			}
 
@@ -78,10 +91,7 @@ void DSWP::threadPartition(Loop *L) {
 		part[i].clear();
 
 	for (int i = 0; i < sccNum; i++) {
-		if (assigned[i] == -2) {
-			// not in the queue (eg an unconditional branch)
-			// TODO: should verify that it's okay...
-		} else if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
+		if (assigned[i] < 0 || assigned[i] >= MAX_THREAD) {
 			error("scc " + itoa(i) + " assigned to " + itoa(assigned[i]));
 		} else {
 			part[assigned[i]].push_back(i);
