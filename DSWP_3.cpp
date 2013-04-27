@@ -48,8 +48,8 @@ void DSWP::threadPartition(Loop *L) {
 			estLatency[i] += top.latency;
 
 			// update the list
-			for (unsigned int j = 0, je = dag[top.u]->size(); j < je; ++j) {
-				int v = dag[top.u]->at(j);
+			for (unsigned int j = 0, je = scc_dependents[top.u]->size(); j < je; ++j) {
+				int v = scc_dependents[top.u]->at(j);
 				if (assigned[v] == -2) {
 					assigned[v] = -1;
 					Q.push(QNode(v, sccLatency[v]));

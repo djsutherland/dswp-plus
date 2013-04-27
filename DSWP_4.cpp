@@ -443,7 +443,8 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	cout << "clearing metadata" << endl;
 	pdg.clear();
 	rev.clear();
-	dag.clear();
+	scc_dependents.clear();
+	scc_parents.clear();
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
