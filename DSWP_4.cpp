@@ -305,7 +305,9 @@ void DSWP::loopSplit(Loop *L) {
 						*/
 						// TODO: need pre-dominator info
 						if (newBB == NULL) {
-							error("whoops, gotta get dominators");
+							error("whoops, no equivalent block in thread " +
+								  itoa(i) + " for " + oldBB->getName().str() +
+							      "; gotta get dominators");
 						}
 						else {
 						// replace the previous target block
@@ -391,15 +393,24 @@ void DSWP::loopSplit(Loop *L) {
 		for (inst_iterator ii = inst_begin(curFunc), ie = inst_end(curFunc);
 				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
-			// TODO: handle phi nodes here
-			for (unsigned int j = 0, je = inst->getNumOperands(); j < je; ++j) {
-				Value *op = inst->getOperand(j);
 
-				if (isa<BasicBlock>(op))
-					continue;
-
-				if (Value *newArg = instMap[i][op]) {
-					inst->setOperand(j, newArg);
+			if (PHINode *phi = dyn_cast<PHINode>(inst)) {
+				for (unsigned int j = 0, je = phi->getNumIncomingValues();
+						j < je; ++j) {
+					Value *val = phi->getIncomingValue(j);
+					if (Value *newArg = instMap[i][val]) {
+						phi->setIncomingValue(j, val);
+					}
+				}
+			} else {
+				for (unsigned int j = 0, je = inst->getNumOperands();
+						j < je; ++j) {
+					Value *op = inst->getOperand(j);
+					if (isa<BasicBlock>(op))
+						continue;
+					if (Value *newArg = instMap[i][op]) {
+						inst->setOperand(j, newArg);
+					}
 				}
 			}
 		}
