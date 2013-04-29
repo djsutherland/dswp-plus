@@ -400,7 +400,7 @@ void DSWP::loopSplit(Loop *L) {
 						j < je; ++j) {
 					Value *val = phi->getIncomingValue(j);
 					if (Value *newArg = instMap[i][val]) {
-						phi->setIncomingValue(j, val);
+						phi->setIncomingValue(j, newArg);
 					}
 				}
 			} else {
