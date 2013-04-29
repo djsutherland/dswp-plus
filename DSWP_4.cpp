@@ -454,6 +454,33 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 		}
 	}
 
+	/*
+     * move the phi nodes to the top of the block
+	 */
+	for (int i = 0; i < MAX_THREAD; i++) {
+		for (Function::iterator bi = allFunc[i]->begin(),
+								be = allFunc[i]->end();
+				bi != be; ++bi) {
+			BasicBlock *bb = bi;
+			Instruction *first_nonphi = bb->getFirstNonPHI();
+
+			BasicBlock::iterator ii = bb->begin(), ie = bb->end();
+			// advance the iterator up to one past first_nonphi
+			while (&(*ii) != first_nonphi) { ++ii; }
+
+			// move any phi nodes after the first nonphi to before it
+			for (BasicBlock::iterator i_next; ii != ie; ii = i_next) {
+				i_next = ii;
+				++i_next;
+
+				Instruction *inst = ii;
+				if (isa<PHINode>(inst)) {
+					inst->moveBefore(first_nonphi);
+				}
+			}
+		}
+	}
+
 	cout << "begin to delete loop" << endl;
 	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
 			bi != be; ++bi) {
