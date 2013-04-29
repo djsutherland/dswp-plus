@@ -59,10 +59,11 @@ class DSWP: public LoopPass {
 
 private:
 	//neccesary information
-	Module * module;
+	Module *module;
 	Function *func;
-	BasicBlock * header;
-	BasicBlock * exit;
+	BasicBlock *header;
+	BasicBlock *predecessor;
+	BasicBlock *exit;
 	LLVMContext *context;
 	Type *eleType;
 	int loopCounter;

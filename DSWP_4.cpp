@@ -218,6 +218,7 @@ void DSWP::loopSplit(Loop *L) {
 			BBMap[BB] = BasicBlock::Create(*context,
 					BB->getName().str() + "_" + itoa(i), curFunc, newExit);
 		}
+		BBMap[predecessor] = newEntry;
 		BBMap[exit] = newExit;
 
 		if (BBMap[header] == NULL) {
@@ -254,8 +255,6 @@ void DSWP::loopSplit(Loop *L) {
 					newInst->setName(inst->getName() + "_" + itoa(i));
 				}
 
-				// TODO: handle phi nodes here
-
 				// re-point branches and such to new blocks
 				if (isa<TerminatorInst>(newInst)) {
 					// re-point any successor blocks
@@ -280,7 +279,7 @@ void DSWP::loopSplit(Loop *L) {
 								oldBB = postidom[oldBB];
 								newBB = BBMap[oldBB];
 								if (oldBB == NULL) {
-									error("dominator info seems broken :(");
+									error("postdominator info seems broken :(");
 									break;
 								}
 							}
@@ -291,6 +290,30 @@ void DSWP::loopSplit(Loop *L) {
 							// TODO check if there are two branch, one branch
 							// is not in the partition, then what the branch
 						}
+					}
+				}
+				else if (PHINode *phi = dyn_cast<PHINode>(newInst)) {
+					// re-point block predecessors of phi nodes
+					// values will be re-pointed later on
+					for (unsigned int j = 0, je = phi->getNumIncomingValues();
+							j < je; j++) {
+						BasicBlock *oldBB = phi->getIncomingBlock(j);
+						BasicBlock *newBB = BBMap[oldBB];
+
+						// if we're branching from a block not in this thread,
+						// go to the previous dominator of that block
+						// NOTE: is this the right thing to do?
+						while (newBB == NULL) {
+							oldBB = idom[oldBB];
+							newBB = BBMap[oldBB];
+							if (oldBB == NULL) {
+								error("dominator info seems broken :(");
+								break;
+							}
+						}
+
+						// replace the previous target block
+						phi->setIncomingBlock(j, newBB);
 					}
 				}
 
@@ -371,15 +394,24 @@ void DSWP::loopSplit(Loop *L) {
 		for (inst_iterator ii = inst_begin(curFunc), ie = inst_end(curFunc);
 				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
-			// TODO: handle phi nodes here
-			for (unsigned int j = 0, je = inst->getNumOperands(); j < je; ++j) {
-				Value *op = inst->getOperand(j);
 
-				if (isa<BasicBlock>(op))
-					continue;
-
-				if (Value *newArg = instMap[i][op]) {
-					inst->setOperand(j, newArg);
+			if (PHINode *phi = dyn_cast<PHINode>(inst)) {
+				for (unsigned int j = 0, je = phi->getNumIncomingValues();
+						j < je; ++j) {
+					Value *val = phi->getIncomingValue(j);
+					if (Value *newArg = instMap[i][val]) {
+						phi->setIncomingValue(j, val);
+					}
+				}
+			} else {
+				for (unsigned int j = 0, je = inst->getNumOperands();
+						j < je; ++j) {
+					Value *op = inst->getOperand(j);
+					if (isa<BasicBlock>(op))
+						continue;
+					if (Value *newArg = instMap[i][op]) {
+						inst->setOperand(j, newArg);
+					}
 				}
 			}
 		}

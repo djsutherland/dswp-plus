@@ -28,6 +28,7 @@ DSWP::DSWP() : LoopPass (ID){
 
 bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 	header = L->getHeader();
+	predecessor = L->getLoopPredecessor();
 	exit = L->getExitBlock();
 	func = header->getParent();
 	module = func->getParent();
@@ -37,6 +38,9 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 
 	if (exit == NULL) {
 		error("exit not unique!");
+	}
+	if (predecessor == NULL) {
+		error("loop predecessor not unique!");
 	}
 
 	Function * produce = module->getFunction("sync_produce");
