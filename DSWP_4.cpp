@@ -435,75 +435,64 @@ void DSWP::getDominators(Loop *L) {
 }
 
 
-void DSWP::getLiveinfo(Loop * L) {
+void DSWP::getLiveinfo(Loop *L) {
 	defin.clear();
 	livein.clear();
 	liveout.clear();
 
-	//currently I don't want to use standard liveness analysis
+	// Figure out which variables are live.
+	// Don't want to use standard liveness analysis....
+
+	// Find variables defined in the loop, and those that are used outside
+	// the loop.
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 							  be = L->getBlocks().end();
 			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(), ue = BB->end();
-				ui != ue; ++ui) {
-			Instruction *inst = &(*ui);
+		for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
+				ii != ie; ++ii) {
+			Instruction *inst = &(*ii);
 			if (util.hasNewDef(inst)) {
 				defin.push_back(inst);
 			}
-			for (Instruction::use_iterator oi = inst->use_begin(); oi
-					!= inst->use_end(); oi++) {
-				User *use = *oi;
-				if (Instruction *ins = dyn_cast<Instruction>(use)) {
-					if (!L->contains(ins)) {
-						cout << endl;
-						inst->dump();
-						ins->dump();
-						error("\tloop defin exist outside the loop");
-						cout << endl;
+			bool already_liveouted = false;
+			for (Instruction::use_iterator ui = inst->use_begin(),
+										   ue = inst->use_end();
+					ui != ue; ++ui) {
+				User *use = *ui;
+				if (Instruction *use_i = dyn_cast<Instruction>(use)) {
+					if (!already_liveouted && !L->contains(use_i)) {
+						liveout.push_back(inst);
+						already_liveouted = true;
 					}
 				} else {
-					error("tell me how could not");
+					error("used by something that's not an instruction???");
 				}
 			}
 		}
 	}
 
-	//make all the use in the loop, but not defin in it, as live in variable
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi
-			!= L->getBlocks().end(); bi++) {
+	// Anything used in the loop that's not defined in it is a livein variable.
+	for (Loop::block_iterator bi = L->getBlocks().begin(),
+							  be = L->getBlocks().end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
-			Instruction *inst = &(*ui);
+		for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
+				ii != ie; ++ii) {
+			Instruction *inst = &(*ii);
 
-			for (Instruction::op_iterator oi = inst->op_begin(); oi
-					!= inst->op_end(); oi++) {
+			for (Instruction::op_iterator oi = inst->op_begin(),
+										  oe = inst->op_end();
+					oi != oe; ++oi) {
 				Value *op = *oi;
-				if (isa<Instruction> (op) || isa<Argument> (op)) {
-					if (find(defin.begin(), defin.end(), op) == defin.end()) { //variable not defin in loop
-						if (find(livein.begin(), livein.end(), op) == livein.end())	//deduplicate
-							livein.push_back(op);
-					}
+				if ((isa<Instruction>(op) || isa<Argument>(op)) &&
+						find(defin.begin(), defin.end(), op) == defin.end() &&
+						find(livein.begin(), livein.end(), op) == livein.end()) {
+					// the operand is a variable that isn't defined inside the
+					// loop and hasn't already been counted as livein
+					livein.push_back(op);
 				}
 			}
 		}
 	}
-
-	//NOW I DIDN'T SEE WHY WE NEED LIVE OUT
-	//	//so basically I add variables used in loop but not been declared in loop as live variable
-	//
-	//	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout
-	//	liveout = livein;
-	//	liveout.insert(defin.begin(), defin.end());
-	//
-	//	//now we can delete those in liveout but is not really live outside the loop
-	//	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
-	//	BasicBlock *exit = L->getExitBlock();
-	//
-	//	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it = it2) {
-	//		it2 = it; it2 ++;
-	//		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
-	//			liveout.erase(it);
-	//		}
-	//	}
 }

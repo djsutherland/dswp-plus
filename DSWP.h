@@ -166,11 +166,11 @@ private:
 	// get dominator information
 	void getDominators(Loop *L);
 
-	//get live variable infomration
-	void getLiveinfo(Loop * L);
-	vector<Value *> livein; //live in variable
-	vector<Value *> defin; //Variable generate in the loop
-	vector<Value *> liveout;
+	//get live variable information
+	void getLiveinfo(Loop *L);
+	vector<Value *> livein; // inputs to the loop
+	vector<Value *> defin; // variable generated within the loop
+	vector<Value *> liveout; // variables needed after the loop is done
 
 	// part 5: synchronization insertion
 	void insertSynDependecy(Loop *L);
