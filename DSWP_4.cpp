@@ -467,6 +467,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 			BasicBlock::iterator ii = bb->begin(), ie = bb->end();
 			// advance the iterator up to one past first_nonphi
 			while (&(*ii) != first_nonphi) { ++ii; }
+			++ii;
 
 			// move any phi nodes after the first nonphi to before it
 			for (BasicBlock::iterator i_next; ii != ie; ii = i_next) {
