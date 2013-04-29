@@ -571,7 +571,11 @@ void DSWP::getLiveinfo(Loop * L) {
 				User *use = *oi;
 				if (Instruction *ins = dyn_cast<Instruction>(use)) {
 					if (!L->contains(ins)) {
-						error("loop defin exist outside the loop");
+						cout << endl;
+						inst->dump();
+						ins->dump();
+						error("\tloop defin exist outside the loop");
+						cout << endl;
 					}
 				} else {
 					error("tell me how could not");
