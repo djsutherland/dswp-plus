@@ -253,3 +253,119 @@ void DSWP::insertConsume(Instruction * u, Instruction *v, DType dtype, int chann
 }
 
 
+void DSWP::clearup(Loop *L, LPPassManager &LPM) {
+	// Move some instructions that may not have been inserted in the right
+	// place, delete the old loop, and clean up our aux data structures for this
+	// loop.
+
+	/*
+	 * move the produce instructions, which have been inserted after the branch,
+	 * in front of it
+	 */
+	for (int i = 0; i < MAX_THREAD; i++) {
+		for (Function::iterator bi = allFunc[i]->begin(),
+								be = allFunc[i]->end();
+				bi != be; ++bi) {
+			BasicBlock *bb = bi;
+			TerminatorInst *term = NULL;
+			for (BasicBlock::iterator ii = bb->begin(), ie = bb->end();
+					ii != ie; ++ii) {
+				Instruction *inst = ii;
+				if (isa<TerminatorInst>(inst)) {
+					term = dyn_cast<TerminatorInst>(inst);
+					break;
+				}
+			}
+
+			if (term == NULL) {
+				error("term cannot be null");
+			}
+
+			while (true) {
+				Instruction *last = &bb->getInstList().back();
+				if (isa<TerminatorInst>(last))
+					break;
+				last->moveBefore(term);
+			}
+		}
+	}
+
+	/*
+     * move the phi nodes to the top of the block
+	 */
+	for (int i = 0; i < MAX_THREAD; i++) {
+		for (Function::iterator bi = allFunc[i]->begin(),
+								be = allFunc[i]->end();
+				bi != be; ++bi) {
+			BasicBlock *bb = bi;
+			Instruction *first_nonphi = bb->getFirstNonPHI();
+
+			BasicBlock::iterator ii = bb->begin(), ie = bb->end();
+			// advance the iterator up to one past first_nonphi
+			while (&(*ii) != first_nonphi) { ++ii; }
+			++ii;
+
+			// move any phi nodes after the first nonphi to before it
+			for (BasicBlock::iterator i_next; ii != ie; ii = i_next) {
+				i_next = ii;
+				++i_next;
+
+				Instruction *inst = ii;
+				if (isa<PHINode>(inst)) {
+					inst->moveBefore(first_nonphi);
+				}
+			}
+		}
+	}
+
+	cout << "begin to delete loop" << endl;
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
+			bi != be; ++bi) {
+		BasicBlock *BB = *bi;
+		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end();
+				ii != ie; ii = i_next) {
+			i_next = ii;
+			++i_next;
+			Instruction &inst = *ii;
+			inst.replaceAllUsesWith(UndefValue::get(inst.getType()));
+			inst.eraseFromParent();
+		}
+	}
+
+	// Delete the basic blocks only afterwards
+	// so that backwards branch instructions don't break
+	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
+			bi != be; ++bi) {
+		BasicBlock *BB = *bi;
+		BB->eraseFromParent();
+	}
+
+	LPM.deleteLoopFromQueue(L);
+
+	cout << "clearing metadata" << endl;
+	pdg.clear();
+	rev.clear();
+	scc_dependents.clear();
+	scc_parents.clear();
+	allEdges.clear();
+	InstInSCC.clear();
+	pre.clear();
+	sccId.clear();
+	used.clear();
+	list.clear();
+	assigned.clear();
+	for (int i = 0; i < MAX_THREAD; i++) {
+		part[i].clear();
+		instMap[i].clear();
+	}
+	sccLatency.clear();
+	newToOld.clear();
+	newInstAssigned.clear();
+	allFunc.clear();
+	idom.clear();
+	postidom.clear();
+	livein.clear();
+	defin.clear();
+	liveout.clear();
+	dname.clear();
+}
