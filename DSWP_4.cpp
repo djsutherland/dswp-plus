@@ -279,7 +279,7 @@ void DSWP::loopSplit(Loop *L) {
 								oldBB = postidom[oldBB];
 								newBB = BBMap[oldBB];
 								if (oldBB == NULL) {
-									error("dominator info seems broken :(");
+									error("postdominator info seems broken :(");
 									break;
 								}
 							}
@@ -303,22 +303,17 @@ void DSWP::loopSplit(Loop *L) {
 						// if we're branching from a block not in this thread,
 						// go to the previous dominator of that block
 						// NOTE: is this the right thing to do?
-						/*
 						while (newBB == NULL) {
-							oldBB = pre_dominator[oldBB];
+							oldBB = idom[oldBB];
 							newBB = BBMap[oldBB];
+							if (oldBB == NULL) {
+								error("dominator info seems broken :(");
+								break;
+							}
 						}
-						*/
-						// TODO: need pre-dominator info
-						if (newBB == NULL) {
-							error("whoops, no equivalent block in thread " +
-								  itoa(i) + " for " + oldBB->getName().str() +
-							      "; gotta get dominators");
-						}
-						else {
+
 						// replace the previous target block
 						phi->setIncomingBlock(j, newBB);
-						}
 					}
 				}
 
