@@ -149,6 +149,7 @@ private:
 	void preLoopSplit(Loop *L);
 
 	void loopSplit(Loop *L);
+	StructType *argStructTy; // the type of the struct that worker threads get
 
 	void clearup(Loop *L, LPPassManager &LPM);
 

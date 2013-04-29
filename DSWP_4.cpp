@@ -51,21 +51,31 @@ void DSWP::preLoopSplit(Loop *L) {
 		}
 	}
 
-
 	/*
 	 * add functions for the worker threads
 	 */
 
-	// type objects for the functions:  int8 * -> int8
-	vector<Type*> funArgTy;
-	PointerType* argPointTy = PointerType::get(Type::getInt8Ty(*context), 0);
-	funArgTy.push_back(argPointTy);
-	FunctionType *fType = FunctionType::get(
-			Type::getInt8PtrTy(*context), funArgTy, false);
+	Type *void_ty = Type::getVoidTy(*context),
+	     *int32_ty = Type::getInt32Ty(*context),
+	     *int64_ty = Type::getInt64Ty(*context),
+	     *int8_ptr_t = Type::getInt8PtrTy(*context);
+
+	// create a struct type for the arguments
+	vector<Type *> liveinTypes;
+	for (unsigned int i = 0; i < livein.size(); i++) {
+		liveinTypes.push_back(livein[i]->getType());
+	}
+	argStructTy = StructType::create(
+		*context, liveinTypes, "argstruct_" + itoa(loopCounter) + "_ty");
+
+	// types for the functions: void* -> void*, b/c that's what pthreads wants
+	vector<Type *> funArgTy;
+	funArgTy.push_back(int8_ptr_t);
+	FunctionType *fType = FunctionType::get(int8_ptr_t, funArgTy, false);
 
 	// add the actual functions for each thread
 	for (int i = 0; i < MAX_THREAD; i++) {
-		Constant * c = module->getOrInsertFunction(
+		Constant *c = module->getOrInsertFunction(
 				itoa(loopCounter) + "_subloop_" + itoa(i), fType);
 		if (c == NULL) {  // NOTE: don't think this is possible...?
 			error("no function!");
@@ -78,52 +88,21 @@ void DSWP::preLoopSplit(Loop *L) {
 
 
 	/*
-	 * prepare the actual parameters type
+	 * instructions to construct the argument struct
 	 */
 
-	// the array of arguments for the actual split function call
-	ArrayType *arrayType = ArrayType::get(eleType, livein.size());
-	AllocaInst *trueArg = new AllocaInst(arrayType, "", brInst);
-	//trueArg->setAlignment(8);
-
+	AllocaInst *argStruct = new AllocaInst(
+		argStructTy, "argstruct_" + itoa(loopCounter), brInst);
 	for (unsigned int i = 0; i < livein.size(); i++) {
-		Value *val = livein[i];
-
-		// add an instruction to cast the value into eleType to store in the
-		// argument array
-		CastInst *castVal;
-#define ARGS val, eleType, val->getName() + "_arg", brInst
-		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(ARGS);
-		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(ARGS);
-		} else if (val->getType()->isFloatingPointTy()) {
-			if (val->getType()->isFloatTy()) {
-				error("floatTypeSuck"); // NOTE: not sure what the problem is?
-			}
-			castVal = new BitCastInst(ARGS);
-		} else {
-			error("what's the hell of the type");
-		}
-#undef ARGS
-
 		// get the element pointer where we're storing this argument
-		ConstantInt* idx = ConstantInt::get(
-				Type::getInt64Ty(*context), (uint64_t) i);
-		vector<Value *> arg;
-		arg.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
-		arg.push_back(idx);
-		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
-				trueArg, arg, "", brInst);
+		vector<Value *> gep_args;
+		gep_args.push_back(ConstantInt::get(int64_ty, 0));
+		gep_args.push_back(ConstantInt::get(int32_ty, i));
+		GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
+			argStruct, gep_args, "", brInst);
 
-		// actually store the value
-		StoreInst *storeVal = new StoreInst(castVal, ele_addr, brInst);
-
-//		vector<Value *> showArg;
-//		showArg.push_back(castVal);
-//		Function *show = module->getFunction("showValue");
-//		CallInst *callShow = CallInst::Create(show, showArg);
-//		callShow->insertBefore(brInst);
+		// actually store it
+		StoreInst *storeVal = new StoreInst(livein[i], ele_addr, brInst);
 	}
 
 	Function *init = module->getFunction("sync_init");
@@ -134,18 +113,15 @@ void DSWP::preLoopSplit(Loop *L) {
 	 * call the worker functions
 	 */
 	Function *delegate = module->getFunction("sync_delegate");
-	PointerType *finalType = PointerType::get(eleType, 0);
+	CastInst *argStruct_voidPtr = CastInst::CreatePointerCast(
+		argStruct, int8_ptr_t,
+		"argstruct_" + itoa(loopCounter) + "_cast", brInst);
 
 	for (int i = 0; i < MAX_THREAD; i++) {
-		// bit-cast the true argument into eleType*
-		BitCastInst *finalArg = new BitCastInst(
-				trueArg, finalType, "cast_args_" + itoa(i), brInst);
-
 		vector<Value*> args;
-		args.push_back( // the thread id
-				ConstantInt::get(Type::getInt32Ty(*context), (uint64_t) i));
+		args.push_back(ConstantInt::get(int32_ty, i)); // the thread id
 		args.push_back(allFunc[i]); // the function pointer
-		args.push_back(finalArg); // the bit-cast argument
+		args.push_back(argStruct_voidPtr); // the argument struct
 		CallInst * callfunc = CallInst::Create(delegate, args, "", brInst);
 	}
 
@@ -159,10 +135,6 @@ void DSWP::preLoopSplit(Loop *L) {
 
 
 void DSWP::loopSplit(Loop *L) {
-	// cout << "Loop split" << endl;
-
-
-
 	//check for each partition, find relevant blocks, set could auto deduplicate
 
 	for (int i = 0; i < MAX_THREAD; i++) {
@@ -327,7 +299,7 @@ void DSWP::loopSplit(Loop *L) {
 		}
 
 		/*
-		 * Load the arguments, replacing variables that are live at the start
+		 * Load the arguments, replacing livein variables
 		 */
 		Function::ArgumentListType &arglist = curFunc->getArgumentList();
 		if (arglist.size() != 1) {
@@ -340,51 +312,39 @@ void DSWP::loopSplit(Loop *L) {
 		inHeader->insertBefore(newToHeader);
 
 		BitCastInst *castArgs = new BitCastInst(
-				args, PointerType::get(Type::getInt64Ty(*context), 0));
+				args, PointerType::get(argStructTy, 0));
 		castArgs->insertBefore(newToHeader);
 
 		for (unsigned int j = 0, je = livein.size(); j < je; j++) {
 			cout << "Handling argument: " << livein[j]->getName().str() << endl;
 
 			// get pointer to the jth argument
-			ConstantInt* idx = ConstantInt::get(
-					Type::getInt64Ty(*context), (uint64_t) j);
-			GetElementPtrInst* ele_addr =
-					GetElementPtrInst::Create(castArgs, idx, "");
-			ele_addr->insertBefore(newToHeader);
+			vector<Value *> gep_args;
+			gep_args.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
+			gep_args.push_back(ConstantInt::get(Type::getInt32Ty(*context), j));
+			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
+				castArgs, gep_args, "", newToHeader);
 
 			// load it
 			LoadInst *ele_val = new LoadInst(ele_addr);
-			ele_val->setAlignment(8);
+			ele_val->setAlignment(8); // TODO do we want this?
 			ele_val->setName(livein[j]->getName().str() + "_val");
 			ele_val->insertBefore(newToHeader);
 
+			/*
 			// debug: show the value
 			vector<Value *> showArg;
 			showArg.push_back(ele_val);
 			Function *show = module->getFunction("showValue");
 			CallInst *callShow = CallInst::Create(show, showArg);
 			callShow->insertBefore(newToHeader);
+			*/
 
-			// cast it to the appropriate type
-			Value *val = livein[j];
-			CastInst *ele_cast;
-			if (val->getType()->isIntegerTy()) {
-				ele_cast = new TruncInst(ele_val, val->getType());
-			} else if (val->getType()->isPointerTy()) {
-				ele_cast = new TruncInst(ele_val, Type::getInt32Ty(*context));
-				ele_cast->insertBefore(newToHeader);
-				ele_cast = new IntToPtrInst(ele_val, val->getType());
-			} else if (val->getType()->isFloatingPointTy()) {
-				if (val->getType()->isFloatTy())
-					error("float type suck");
-				ele_cast  = new BitCastInst(ele_val, val->getType());
-			} else {
-				error("what's the hell of the type");
-				//ele_cast  = new BitCastInst(ele_val, val->getType());
+			if (ele_val->getType() != livein[j]->getType()) {
+				error("broken type for " + livein[j]->getName().str());
 			}
-			ele_cast->insertBefore(newToHeader);
-			instMap[i][val] = ele_cast;
+
+			instMap[i][livein[j]] = ele_val;
 		}
 
 		/*
