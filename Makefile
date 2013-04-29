@@ -54,6 +54,8 @@ Example/%.bc.ll: Example/%.bc
 	llvm-dis $< -o $@
 Example/%.out: Example/%.bc runtime/libruntime.a
 	clang -O0 -pthread $< runtime/libruntime.a -o $@
+run/%: Example/%.out
+	$<
 time/%: Example/%.out
 	time $<
 
