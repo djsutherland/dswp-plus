@@ -60,8 +60,10 @@ time/%: Example/%.out
 ### cleaning up
 tidy:
 	rm -f *.o runtime/*.o runtime/tests/*.o *.d runtime/*.d runtime/tests/*.d
+tidy-output:
 	rm -f dag partition showgraph
-clean-examples:
+clean-examples: tidy-output
 	rm -f Example/*.bc Example/*.bc.ll Example/*.out
-clean: tidy clean-examples
+clean-objs: tidy
 	rm -f DSWP.so runtime/libruntime.a runtime/tests/test runtime/tests/sync_test
+clean: clean-objs clean-examples
