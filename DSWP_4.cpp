@@ -161,6 +161,8 @@ void DSWP::preLoopSplit(Loop *L) {
 void DSWP::loopSplit(Loop *L) {
 	// cout << "Loop split" << endl;
 
+
+
 	//check for each partition, find relevant blocks, set could auto deduplicate
 
 	for (int i = 0; i < MAX_THREAD; i++) {
@@ -274,8 +276,12 @@ void DSWP::loopSplit(Loop *L) {
 							// go to the next post-dominator
 							// NOTE: right?
 							while (newBB == NULL) {
-								oldBB = pre[oldBB];
+								oldBB = postidom[oldBB];
 								newBB = BBMap[oldBB];
+								if (oldBB == NULL) {
+									error("dominator info seems broken :(");
+									break;
+								}
 							}
 
 							// replace the target block
@@ -480,7 +486,8 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	cout << "clearing metadata" << endl;
 	pdg.clear();
 	rev.clear();
-	dag.clear();
+	scc_dependents.clear();
+	scc_parents.clear();
 	allEdges.clear();
 	InstInSCC.clear();
 	pre.clear();
@@ -496,10 +503,28 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	newToOld.clear();
 	newInstAssigned.clear();
 	allFunc.clear();
+	idom.clear();
+	postidom.clear();
 	livein.clear();
 	defin.clear();
 	liveout.clear();
 	dname.clear();
+}
+
+
+void DSWP::getDominators(Loop *L) {
+	DominatorTree &dom_tree = getAnalysis<DominatorTree>();
+	PostDominatorTree &postdom_tree = getAnalysis<PostDominatorTree>();
+
+	for (Function::iterator bi = func->begin(); bi != func->end(); bi++) {
+		BasicBlock *BB = bi;
+
+		DomTreeNode *idom_node = dom_tree.getNode(BB)->getIDom();
+		idom[BB] = idom_node == NULL ? NULL : idom_node->getBlock();
+
+		DomTreeNode *postidom_node = postdom_tree.getNode(BB)->getIDom();
+		postidom[BB] = postidom_node == NULL ? NULL : postidom_node->getBlock();
+	}
 }
 
 

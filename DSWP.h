@@ -97,8 +97,11 @@ private:
 	map<Instruction *, vector<Edge> *> pdg;
 	//reverse graph for scc
 	map<Instruction *, vector<Edge> *> rev;
-	//dag
-	map<int, vector<int> *> dag;
+
+	// DAG of the SCC relationships
+	map<int, vector<int> *> scc_dependents;
+	map<int, vector<int> *> scc_parents;
+
 	//edge table, all the dependency relationship
 	vector<Edge> allEdges;
 
@@ -106,6 +109,9 @@ private:
 
 	//the father node for each block in post dominator tree
 	map<BasicBlock *, BasicBlock *> pre;
+
+	// the immediate dominator and postdominator for each basic block
+	map<BasicBlock *, BasicBlock *> idom, postidom;
 
 	//total number of scc
 	int sccNum;
@@ -156,6 +162,9 @@ private:
 
 	//the new functions (has already been inserted, waiting for syn)
 	vector<Function *> allFunc;
+
+	// get dominator information
+	void getDominators(Loop *L);
 
 	//get live variable infomration
 	void getLiveinfo(Loop * L);

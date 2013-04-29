@@ -53,7 +53,8 @@ void DSWP::dfs2(Instruction *I) {
 void DSWP::buildDAG(Loop *L) {
 
 	for (int i = 0; i < sccNum; i++) {
-		dag[i] = new vector<int>();
+		scc_dependents[i] = new vector<int>();
+		scc_parents[i] = new vector<int>();
 	}
 
 	map<int, map<int, bool> > added;
@@ -70,7 +71,8 @@ void DSWP::buildDAG(Loop *L) {
 
 				//it is possible the edge has already been added
 				if (!added[u][v] && u != v) {
-					dag[u]->push_back(v);
+					scc_dependents[u]->push_back(v);
+					scc_parents[v]->push_back(u);
 					added[u][v] = true;
 				}
 			}
