@@ -100,9 +100,9 @@ private:
 	void dfs_reverse(Instruction *inst);
 
 	//program dependence graph
-	map<Instruction *, vector<Edge> *> pdg;
+	map<Instruction *, vector<Edge> > pdg;
 	//reverse graph for scc
-	map<Instruction *, vector<Edge> *> rev;
+	map<Instruction *, vector<Edge> > rev;
 
 	// DAG of the SCC relationships
 	map<int, vector<int> > scc_dependents;

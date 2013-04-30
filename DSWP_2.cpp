@@ -47,8 +47,7 @@ void DSWP::dfs_forward(Instruction *I) {
 	*/
 
 	used[I] = true;
-	for (vector<Edge>::iterator ei = pdg[I]->begin(); ei != pdg[I]->end();
-								ei++) {
+	for (vector<Edge>::iterator ei = pdg[I].begin(); ei != pdg[I].end(); ei++) {
 		Instruction *next = ei->v;
 		if (!used[next])
 			dfs_forward(next);
@@ -70,7 +69,7 @@ void DSWP::dfs_reverse(Instruction *I) {
 	*/
 
 	used[I] = true;
-	for (vector<Edge>::iterator ei = rev[I]->begin(); ei != rev[I]->end(); ei++) {
+	for (vector<Edge>::iterator ei = rev[I].begin(); ei != rev[I].end(); ei++) {
 		Instruction *next = ei->v;
 		if (!used[next])
 			dfs_reverse(next);

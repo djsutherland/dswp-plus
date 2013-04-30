@@ -235,7 +235,7 @@ void DSWP::loopSplit(Loop *L) {
 				relbb.insert(inst->getParent());
 
 				// add blocks which the instruction is dependent on
-				const vector<Edge> &edges = *rev[inst];
+				const vector<Edge> &edges = rev[inst];
 				for (vector<Edge>::const_iterator ei = edges.begin(),
 												  ee = edges.end();
 						ei != ee; ei++) {
