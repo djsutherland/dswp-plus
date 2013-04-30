@@ -56,6 +56,7 @@ void DSWP::buildPDG(Loop *L) {
 	 * Memory dependence analysis
 	 */
 
+	AliasAnalysis &aa = Pass::getAnalysis<AliasAnalysis>();
 	MemoryDependenceAnalysis &mda = Pass::getAnalysis<MemoryDependenceAnalysis>();
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
@@ -81,8 +82,22 @@ void DSWP::buildPDG(Loop *L) {
 			//finish register dependence
 
 			//begin memory dependence
+			if (!inst->mayReadOrWriteMemory()) {
+				continue; // not supposed to run getDependency on non-mem insts
+			}
+
 			MemDepResult mdr = mda.getDependency(inst);
 			//TODO not sure clobbers mean!!
+
+			cout << endl << "\t";
+			inst->print(outstream);
+			cout << endl
+				 << "\t" << "isClobber: " << mdr.isClobber()
+			     << "\t" << "isDef: " << mdr.isDef()
+			     << "\t" << "isNonFuncLocal: " << mdr.isNonFuncLocal()
+			     << "\t" << "isNonLocal: " << mdr.isNonLocal()
+			     << "\t" << "isUnknown: " << mdr.isUnknown()
+			     << endl << endl;
 
 			if (mdr.isDef()) {
 				Instruction *dep = mdr.getInst();
@@ -139,7 +154,48 @@ void DSWP::buildPDG(Loop *L) {
 				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
 			else if (mdr.isClobber()) {
-				cout<<"CLOBBER detected. What should we do?"<<endl;
+				error("CLOBBER detected. What should we do?");
+			}
+
+			if (mdr.isNonLocal()) {
+				AliasAnalysis::Location MemLoc;
+				bool is_load;
+				if (LoadInst *i = dyn_cast<LoadInst>(inst)) {
+					MemLoc = aa.getLocation(i);
+					is_load = true;
+				} else if (StoreInst *i = dyn_cast<StoreInst>(inst)) {
+					MemLoc = aa.getLocation(i);
+					is_load = false;
+				} else {
+					// there are overrides for
+					// VAArgInst, AtomicCmpXchInst, AtomicRMWInst
+					error("aaaah exploding");
+					return;
+				}
+
+				typedef SmallVector<NonLocalDepResult, 6> res_t;
+				res_t res;
+				mda.getNonLocalPointerDependency(
+					MemLoc, is_load, inst->getParent(), res);
+
+				for (res_t::iterator ri = res.begin(), re = res.end();
+						ri != re; ++ri) {
+					NonLocalDepResult &r = *ri;
+					Instruction *dep = r.getResult().getInst();
+
+					if (!L->contains(dep)) {
+						continue;
+					}
+
+					addEdge(dep, inst, DANTI);
+					// TODO: actually figure out the dependence type
+
+					cout << ">>NONLOCAL dependency: [[";
+					dep->print(outstream);
+					cout << "]] -> [[";
+					inst->print(outstream);
+					cout << "]]" << endl;
+				}
 			}
 			//end memory dependence
 		}//for ii
