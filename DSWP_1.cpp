@@ -155,57 +155,84 @@ void DSWP::buildPDG(Loop *L) {
 			}
 
 			if (mdr.isClobber()) {
-				error("CLOBBER detected. What should we do?");
+				Instruction *dep = mdr.getInst();
+				addEdge(dep, inst, DANTI); // TODO dep type
 			}
 
 			if (mdr.isNonLocal()) {
-				AliasAnalysis::Location MemLoc;
-				bool is_load;
-				if (LoadInst *i = dyn_cast<LoadInst>(inst)) {
-					MemLoc = aa.getLocation(i);
-					is_load = true;
-				} else if (StoreInst *i = dyn_cast<StoreInst>(inst)) {
-					MemLoc = aa.getLocation(i);
-					is_load = false;
+				if (CallInst *call = dyn_cast<CallInst>(inst)) {
+					const MemoryDependenceAnalysis::NonLocalDepInfo &rs
+						= mda.getNonLocalCallDependency(call);
+					for (MemoryDependenceAnalysis::NonLocalDepInfo::const_iterator
+							ri = rs.begin(), re = rs.end(); ri != re; ++ri) {
+						const NonLocalDepEntry &entry = *ri;
+						Instruction *dep = entry.getResult().getInst();
+
+						if (dep == NULL) {
+							continue; // what's going on here?
+						} else if (!L->contains(dep)) {
+							continue;
+						}
+
+						addEdge(dep, inst, DANTI); // TODO: dep type
+
+						cout << ">>NONLOCAL CALL dependency: [[";
+						dep->print(outstream);
+						cout << "]] -> [[";
+						inst->print(outstream);
+						cout << "]]" << endl;
+					}
 				} else {
-					// there are overrides for
-					// VAArgInst, AtomicCmpXchInst, AtomicRMWInst
-					error("aaaah exploding");
-					return;
-				}
-
-				typedef SmallVector<NonLocalDepResult, 6> res_t;
-				res_t res;
-				mda.getNonLocalPointerDependency(
-					MemLoc, is_load, inst->getParent(), res);
-
-				for (res_t::iterator ri = res.begin(), re = res.end();
-						ri != re; ++ri) {
-					NonLocalDepResult &r = *ri;
-					Instruction *dep = r.getResult().getInst();
-
-					if (!L->contains(dep)) {
-						continue;
+					AliasAnalysis::Location MemLoc;
+					bool is_load;
+					if (LoadInst *i = dyn_cast<LoadInst>(inst)) {
+						MemLoc = aa.getLocation(i);
+						is_load = true;
+					} else if (StoreInst *i = dyn_cast<StoreInst>(inst)) {
+						MemLoc = aa.getLocation(i);
+						is_load = false;
+					} else if (VAArgInst *i = dyn_cast<VAArgInst>(inst)) {
+						MemLoc = aa.getLocation(i);
+						is_load = true;
+					} else {
+						// also does AtomicCmpXchInst, AtomicRMWInst
+						// but what about call?
+						error("aaaah exploding");
+						return;
 					}
 
-					addEdge(dep, inst, DANTI);
-					// TODO: actually figure out the dependence type
+					typedef SmallVector<NonLocalDepResult, 6> res_t;
+					res_t res;
+					mda.getNonLocalPointerDependency(
+						MemLoc, is_load, inst->getParent(), res);
 
-					cout << ">>NONLOCAL dependency: [[";
-					dep->print(outstream);
-					cout << "]] -> [[";
-					inst->print(outstream);
-					cout << "]]" << endl;
+					for (res_t::iterator ri = res.begin(), re = res.end();
+							ri != re; ++ri) {
+						NonLocalDepResult &r = *ri;
+						Instruction *dep = r.getResult().getInst();
+
+						if (!L->contains(dep)) {
+							continue;
+						}
+
+						addEdge(dep, inst, DANTI);
+						// TODO: actually figure out the dependence type
+
+						cout << ">>NONLOCAL dependency: [[";
+						dep->print(outstream);
+						cout << "]] -> [[";
+						inst->print(outstream);
+						cout << "]]" << endl;
+					}
 				}
 			}
-			//end memory dependence
-		}//for ii
-	}//for bi
+		}
+	}
 
 	cout<<">>Finished finding data dependences"<<endl;
 
 
-	/* 
+	/*
 	 *
 	 * Topologically sort blocks and create peeled loop
 	 *
@@ -246,7 +273,7 @@ void DSWP::buildPDG(Loop *L) {
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 					be = L->getBlocks().end(); bi != be; bi++) {
 		BasicBlock *BB = *bi;
-		if (b_visited.find(BB) == b_visited.end()) //Not visited 
+		if (b_visited.find(BB) == b_visited.end()) //Not visited
 			dfsVisit(BB, b_visited, bb_ordered, L);
 	}
 
@@ -270,16 +297,16 @@ void DSWP::buildPDG(Loop *L) {
 		do {
 			--it;
 			//Dummy block for first iteration
-			const std::string str1 = "tophalf_" + (*it)->getName().str(); 
-			const std::string str2 = "bottomhalf_" + (*it)->getName().str(); 
+			const std::string str1 = "tophalf_" + (*it)->getName().str();
+			const std::string str2 = "bottomhalf_" + (*it)->getName().str();
 			const Twine n1(str1);
 			const Twine n2(str2);
 			cout<<"n1 = "<<n1.str()<<", n2 = "<<n2.str()<<endl;
 			BasicBlock *newbb = BasicBlock::Create(ctxt,
-												   n1, ctrlfunc, 0); 
+												   n1, ctrlfunc, 0);
 			//Dummy block for second iteration
 			BasicBlock *newbb2 = BasicBlock::Create(ctxt,
-												   n2, ctrlfunc, 0); 
+												   n2, ctrlfunc, 0);
 
 			dummylist.push_back(newbb);
 			dummylist.push_back(newbb2);
@@ -321,7 +348,7 @@ void DSWP::buildPDG(Loop *L) {
 					cout<<">>Adding "<<(*pi)->getName().str()<<" as exiting block"<<endl;
 					returnblocks.insert(*pi); //Insert block as a return block
 				}
-		}	
+		}
 	}
 
 	//Add branch instructions for dummy blocks
@@ -330,7 +357,7 @@ void DSWP::buildPDG(Loop *L) {
 		do {
 			--it;
 			std::pair<BasicBlock *, BasicBlock *> dummypair = realtodummy[*it];
-			BasicBlock *bbdummy1 = dummypair.first; 
+			BasicBlock *bbdummy1 = dummypair.first;
 			BasicBlock *bbdummy2 = dummypair.second;
 			IRBuilder<> builder1(bbdummy1);
 			IRBuilder<> builder2(bbdummy2);
@@ -338,10 +365,10 @@ void DSWP::buildPDG(Loop *L) {
 			TerminatorInst *tinst = (*it)->getTerminator();
 			unsigned nsucc = tinst->getNumSuccessors();
 			SwitchInst *SI1, *SI2;
-			bool swcreated1 = false, swcreated2 = false; 
+			bool swcreated1 = false, swcreated2 = false;
 
 			//Deal with exit blocks
-			if (returnblocks.find(*it) != returnblocks.end()) 
+			if (returnblocks.find(*it) != returnblocks.end())
 			{
 				SI1 = builder1.CreateSwitch(ConstantInt::get(
 						Type::getInt64Ty(getGlobalContext()), 0),
@@ -429,7 +456,7 @@ void DSWP::buildPDG(Loop *L) {
 		 it != dummylist.end(); ++it)
 	{
 		TerminatorInst *tinst = (*it)->getTerminator();
-		unsigned nsucc = tinst->getNumSuccessors(); 
+		unsigned nsucc = tinst->getNumSuccessors();
 
 		for (unsigned i = 0; i < nsucc; i++) {
 			BasicBlock *bsucc = tinst->getSuccessor(i);
