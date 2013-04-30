@@ -76,6 +76,8 @@ void DSWP::dfs_reverse(Instruction *I) {
 			dfs_reverse(next);
 		else { //Represents edge between two different SCCs
 			int u = sccId[next];
+			if (u == sccNum)
+				continue;
 			std::pair<int, int> sccedge = std::make_pair(u, sccNum);
 			if (!dag_added[sccedge]) { //No edge between two SCCs yet
 				//Add the edge

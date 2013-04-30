@@ -393,14 +393,16 @@ void DSWP::buildPDG(Loop *L) {
 			while (succnode != dn && depblock != dummyexitblock)
 			{
 				BasicBlock *realdepblock = dummytoreal[depblock];
-				if (realblock != realdepblock) {
+				TerminatorInst *ti = realblock->getTerminator();
+				for (BasicBlock::iterator bi = realdepblock->begin(),
+						 be = realdepblock->end(); bi != be; ++bi) {
+					Instruction *inst = &(*bi);
 					cout<<"Adding control edge from [[";
-					realblock->getTerminator()->print(outstream);
-					cout<<"]](in block "<<realblock->getName().str()<<") to [[";
-					realdepblock->begin()->print(outstream);
-					cout<<"]]("<<realdepblock->getName().str()<<")"<<endl;
-					addEdge(realblock->getTerminator(), realdepblock->begin(),
-							CONTROL);
+					ti->print(outstream);
+					cout<<"]](in "<<realblock->getName().str()<<") to [[";
+					inst->print(outstream);
+					cout<<"]](in "<<realdepblock->getName().str()<<")"<<endl;
+					addEdge(ti, inst, CONTROL);
 				}
 
 				succnode = succnode->getIDom();
