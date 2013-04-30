@@ -206,7 +206,9 @@ void DSWP::buildPDG(Loop *L) {
 						NonLocalDepResult &r = *ri;
 						Instruction *dep = r.getResult().getInst();
 
-						if (!L->contains(dep)) {
+						if (dep == NULL) {
+							continue; // what's going on here?
+						} else if (!L->contains(dep)) {
 							continue;
 						}
 
