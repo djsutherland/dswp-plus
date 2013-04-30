@@ -349,7 +349,6 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	scc_parents.clear();
 	allEdges.clear();
 	InstInSCC.clear();
-	pre.clear();
 	sccId.clear();
 	used.clear();
 	list.clear();
