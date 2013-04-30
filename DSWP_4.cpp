@@ -246,7 +246,14 @@ void DSWP::loopSplit(Loop *L) {
 		}
 
 		if (relbb.size() == 0) {
-			error("no related blocks?");
+			cout << "WARNING: no related blocks, so doing a nothing function" << endl;
+			BasicBlock *newBody =
+				BasicBlock::Create(*context, "do-nothing", curFunc);
+			ReturnInst *newRet = ReturnInst::Create(
+				*context,
+				Constant::getNullValue(Type::getInt8PtrTy(*context)),
+				newBody);
+			return;
 		}
 
 		/*
