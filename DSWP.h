@@ -205,7 +205,6 @@ private:
 	//give each instruction a name, including terminator instructions (which can not be setName)
 	map<Instruction *, string> dname;
 
-	void initilize(Loop *L);
 
 public:
 	static char ID;

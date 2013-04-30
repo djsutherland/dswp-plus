@@ -121,10 +121,6 @@ void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
 	AU.addRequiredTransitive<PostDominatorTree>();
 }
 
-void DSWP::initilize(Loop *L) {
-
-}
-
 bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	if (L->getLoopDepth() != 1)	//ONLY care about top level loops
     	return false;
