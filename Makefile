@@ -56,6 +56,8 @@ valgrind/%: Example/%.bc DSWP.so
 ### (dis)assembling bitcode
 Example/%.bc.ll: Example/%.bc
 	llvm-dis $< -o $@
+Example/%.o: Example/%.bc
+	clang -O0 -c $< -o $@
 Example/%.out: Example/%.bc runtime/libruntime.a
 	clang -O0 -pthread $< runtime/libruntime.a -o $@
 run/%: Example/%.out
@@ -69,7 +71,7 @@ tidy:
 tidy-output:
 	rm -f dag partition showgraph
 clean-examples: tidy-output
-	rm -f Example/*.bc Example/*.bc.ll Example/*.out
+	rm -f Example/*.bc Example/*.bc.ll Example/*.o Example/*.out
 clean-objs: tidy
 	rm -f DSWP.so runtime/libruntime.a runtime/tests/test runtime/tests/sync_test
 clean: clean-objs clean-examples
