@@ -180,8 +180,6 @@ private:
 	vector<Value *> liveout; // variables needed after the loop is done
 
 	// part 5: synchronization insertion
-	void insertSynDependecy(Loop *L);
-
 	void insertSynchronization(Loop *L);
 
 	void insertProduce(Instruction * u, Instruction *v, DType dtype,
