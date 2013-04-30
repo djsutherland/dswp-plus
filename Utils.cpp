@@ -28,11 +28,3 @@ string Utils::genId() {
 	out << "t" << id++;
 	return out.str();
 }
-
-bool Utils::hasNewDef(Instruction *inst) {
-	if (isa<StoreInst>(inst))
-		return false;
-	if (isa<TerminatorInst>(inst))
-		return false;
-	return true;
-}

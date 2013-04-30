@@ -503,7 +503,7 @@ void DSWP::getLiveinfo(Loop *L) {
 		for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
 				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
-			if (util.hasNewDef(inst)) {
+			if (!inst->getType()->isVoidTy()) {
 				defin.push_back(inst);
 			}
 			bool already_liveouted = false;

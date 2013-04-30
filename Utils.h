@@ -22,7 +22,6 @@ private:
 	static int id;
 public:
 	static string genId();	//return a new identifier
-	static bool hasNewDef(Instruction *inst);	//check if the instruction has the form of %x = (some expresssion)
 };
 
 #endif /* UTIL_H_ */

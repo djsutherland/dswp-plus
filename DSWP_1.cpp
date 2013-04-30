@@ -30,11 +30,11 @@ void DSWP::buildPDG(Loop *L) {
 			Instruction *inst = &(*ui);
 
 			//standardize the name for all expr
-			if (util.hasNewDef(inst)) {
+			if (inst->getType()->isVoidTy()) {
+				dname[inst] = util.genId();
+			} else {
 				inst->setName(util.genId());
 				dname[inst] = inst->getName().str();
-			} else {
-				dname[inst] = util.genId();
 			}
 
 			// initialize vectors
