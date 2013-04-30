@@ -65,10 +65,11 @@ class DSWP: public LoopPass {
 
 private:
 	//neccesary information
-	Module * module;
+	Module *module;
 	Function *func;
-	BasicBlock * header;
-	BasicBlock * exit;
+	BasicBlock *header;
+	BasicBlock *predecessor;
+	BasicBlock *exit;
 	LLVMContext *context;
 	Type *eleType;
 	int loopCounter;
@@ -154,6 +155,7 @@ private:
 	void preLoopSplit(Loop *L);
 
 	void loopSplit(Loop *L);
+	StructType *argStructTy; // the type of the struct that worker threads get
 
 	void clearup(Loop *L, LPPassManager &LPM);
 
@@ -171,11 +173,11 @@ private:
 	// get dominator information
 	void getDominators(Loop *L);
 
-	//get live variable infomration
-	void getLiveinfo(Loop * L);
-	vector<Value *> livein; //live in variable
-	vector<Value *> defin; //Variable generate in the loop
-	vector<Value *> liveout;
+	//get live variable information
+	void getLiveinfo(Loop *L);
+	vector<Value *> livein; // inputs to the loop
+	vector<Value *> defin; // variable generated within the loop
+	vector<Value *> liveout; // variables needed after the loop is done
 
 	// part 5: synchronization insertion
 	void insertSynDependecy(Loop *L);

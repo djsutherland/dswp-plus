@@ -23,9 +23,9 @@ unsigned long long sync_consume(int val_id) {
 
 // called by master thread
 // sends function pointers to the auxiliary threads
-void sync_delegate(int tid, void *(*fp)(void *), unsigned long long args[]) {
+void sync_delegate(int tid, void *(*fp)(void *), void *args) {
 	printf("create thread!\n");
-	pthread_create(&threads[tid], NULL, fp, (void *) args);
+	pthread_create(&threads[tid], NULL, fp, args);
 }
 
 void sync_join() {

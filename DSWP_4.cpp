@@ -5,6 +5,25 @@
 using namespace llvm;
 using namespace std;
 
+inline void replaceUses(PHINode *phi, map<Value*, Value*> repMap) {
+	for (unsigned int j = 0, je = phi->getNumIncomingValues(); j < je; ++j) {
+		Value *val = phi->getIncomingValue(j);
+		if (Value *newArg = repMap[val]) {
+			phi->setIncomingValue(j, newArg);
+		}
+	}
+}
+
+inline void replaceUses(User *user, map<Value*, Value*> repMap) {
+	for (unsigned int j = 0, je = user->getNumOperands(); j < je; ++j) {
+		Value *op = user->getOperand(j);
+		if (Value *newArg = repMap[op]) {
+			user->setOperand(j, newArg);
+		}
+	}
+}
+
+
 void DSWP::preLoopSplit(Loop *L) {
 	// Makes the loop-replacement block that calls the worker threads.
 	allFunc.clear();
@@ -51,21 +70,23 @@ void DSWP::preLoopSplit(Loop *L) {
 		}
 	}
 
-
 	/*
 	 * add functions for the worker threads
 	 */
 
-	// type objects for the functions:  int8 * -> int8
-	vector<Type*> funArgTy;
-	PointerType* argPointTy = PointerType::get(Type::getInt8Ty(*context), 0);
-	funArgTy.push_back(argPointTy);
-	FunctionType *fType = FunctionType::get(
-			Type::getInt8PtrTy(*context), funArgTy, false);
+	Type *void_ty = Type::getVoidTy(*context),
+	     *int32_ty = Type::getInt32Ty(*context),
+	     *int64_ty = Type::getInt64Ty(*context),
+	     *int8_ptr_t = Type::getInt8PtrTy(*context);
+
+	// types for the functions: void* -> void*, b/c that's what pthreads wants
+	vector<Type *> funArgTy;
+	funArgTy.push_back(int8_ptr_t);
+	FunctionType *fType = FunctionType::get(int8_ptr_t, funArgTy, false);
 
 	// add the actual functions for each thread
 	for (int i = 0; i < MAX_THREAD; i++) {
-		Constant * c = module->getOrInsertFunction(
+		Constant *c = module->getOrInsertFunction(
 				itoa(loopCounter) + "_subloop_" + itoa(i), fType);
 		if (c == NULL) {  // NOTE: don't think this is possible...?
 			error("no function!");
@@ -78,54 +99,46 @@ void DSWP::preLoopSplit(Loop *L) {
 
 
 	/*
-	 * prepare the actual parameters type
+	 * construct the argument struct
 	 */
 
-	// the array of arguments for the actual split function call
-	ArrayType *arrayType = ArrayType::get(eleType, livein.size());
-	AllocaInst *trueArg = new AllocaInst(arrayType, "", brInst);
-	//trueArg->setAlignment(8);
-
-	for (unsigned int i = 0; i < livein.size(); i++) {
-		Value *val = livein[i];
-
-		// add an instruction to cast the value into eleType to store in the
-		// argument array
-		CastInst *castVal;
-#define ARGS val, eleType, val->getName() + "_arg", brInst
-		if (val->getType()->isIntegerTy()) {
-			castVal = new SExtInst(ARGS);
-		} else if (val->getType()->isPointerTy()) {
-			castVal = new PtrToIntInst(ARGS);
-		} else if (val->getType()->isFloatingPointTy()) {
-			if (val->getType()->isFloatTy()) {
-				error("floatTypeSuck"); // NOTE: not sure what the problem is?
-			}
-			castVal = new BitCastInst(ARGS);
-		} else {
-			error("what's the hell of the type");
-		}
-#undef ARGS
-
-		// get the element pointer where we're storing this argument
-		ConstantInt* idx = ConstantInt::get(
-				Type::getInt64Ty(*context), (uint64_t) i);
-		vector<Value *> arg;
-		arg.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
-		arg.push_back(idx);
-		GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
-				trueArg, arg, "", brInst);
-
-		// actually store the value
-		StoreInst *storeVal = new StoreInst(castVal, ele_addr, brInst);
-
-//		vector<Value *> showArg;
-//		showArg.push_back(castVal);
-//		Function *show = module->getFunction("showValue");
-//		CallInst *callShow = CallInst::Create(show, showArg);
-//		callShow->insertBefore(brInst);
+	// create a struct type to store the values of liveout vars in
+	vector<Type *> liveoutTypes;
+	for (unsigned int i = 0; i < liveout.size(); i++) {
+		liveoutTypes.push_back(liveout[i]->getType());
 	}
+	StructType *outStructTy = StructType::create(
+		*context, liveoutTypes, "outstruct_" + itoa(loopCounter) + "_ty");
 
+	// create a struct type for the arguments to worker functions
+	vector<Type *> argTypes;
+	for (unsigned int i = 0; i < livein.size(); i++) {
+		argTypes.push_back(livein[i]->getType());
+	}
+	argTypes.push_back(outStructTy);
+	argStructTy = StructType::create(
+		*context, argTypes, "argstruct_" + itoa(loopCounter) + "_ty");
+
+	// allocate the argument struct
+	AllocaInst *argStruct = new AllocaInst(argStructTy, "argstruct", brInst);
+
+	// store the livein arguments
+	for (unsigned int i = 0; i < livein.size(); i++) {
+		// get the element pointer where we're storing this argument
+		vector<Value *> gep_args;
+		gep_args.push_back(ConstantInt::get(int64_ty, 0));
+		gep_args.push_back(ConstantInt::get(int32_ty, i));
+		GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
+			argStruct, gep_args, livein[i]->getName() + "_argptr", brInst);
+
+		// actually store it
+		StoreInst *storeVal = new StoreInst(livein[i], ele_addr, brInst);
+	}
+	// NOTE: the output argument struct is left uninitialized
+
+	/*
+	 * initialize the communication queues
+	 */
 	Function *init = module->getFunction("sync_init");
 	CallInst *callInit = CallInst::Create(init, "", brInst);
 
@@ -134,18 +147,15 @@ void DSWP::preLoopSplit(Loop *L) {
 	 * call the worker functions
 	 */
 	Function *delegate = module->getFunction("sync_delegate");
-	PointerType *finalType = PointerType::get(eleType, 0);
+	CastInst *argStruct_voidPtr = CastInst::CreatePointerCast(
+		argStruct, int8_ptr_t,
+		"argstruct_" + itoa(loopCounter) + "_cast", brInst);
 
 	for (int i = 0; i < MAX_THREAD; i++) {
-		// bit-cast the true argument into eleType*
-		BitCastInst *finalArg = new BitCastInst(
-				trueArg, finalType, "cast_args_" + itoa(i), brInst);
-
 		vector<Value*> args;
-		args.push_back( // the thread id
-				ConstantInt::get(Type::getInt32Ty(*context), (uint64_t) i));
+		args.push_back(ConstantInt::get(int32_ty, i)); // the thread id
 		args.push_back(allFunc[i]); // the function pointer
-		args.push_back(finalArg); // the bit-cast argument
+		args.push_back(argStruct_voidPtr); // the argument struct
 		CallInst * callfunc = CallInst::Create(delegate, args, "", brInst);
 	}
 
@@ -155,14 +165,51 @@ void DSWP::preLoopSplit(Loop *L) {
 	 */
 	Function *join = module->getFunction("sync_join");
 	CallInst *callJoin = CallInst::Create(join, "", brInst);
+
+	/*
+	 * load the liveout variables from the out struct
+	 */
+	if (!liveout.empty()) {
+		// get the pointer to the output structure
+		vector<Value *> gep_args;
+		gep_args.push_back(ConstantInt::get(int64_ty, 0));
+		gep_args.push_back(ConstantInt::get(int32_ty, livein.size()));
+		GetElementPtrInst *out_addr = GetElementPtrInst::CreateInBounds(
+			argStruct, gep_args, "load_outs", brInst);
+
+		map<Value*, Value*> replacement_map;
+
+		for (unsigned int i = 0; i < liveout.size(); i++) {
+			// get the pointer to this out value
+			gep_args.clear();
+			gep_args.push_back(ConstantInt::get(int64_ty, 0));
+			gep_args.push_back(ConstantInt::get(int32_ty, i));
+			GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
+				out_addr, gep_args, liveout[i]->getName() + "_ptr", brInst);
+
+			// load the out value
+			LoadInst *outVal = new LoadInst(
+				ele_addr, liveout[i]->getName() + "_load", brInst);
+
+			replacement_map[liveout[i]] = outVal;
+		}
+
+		// replace any uses *outside of the loop* with this load instruction
+		for (Function::iterator bi = func->begin(), be = func->end();
+				bi != be; ++bi) {
+			BasicBlock &bb = *bi;
+			if (!L->contains(&bb)) {
+				for (BasicBlock::iterator ii = bb.begin(), ie = bb.end();
+						ii != ie; ++ii) {
+					replaceUses(&(*ii), replacement_map);
+				}
+			}
+		}
+	}
 }
 
 
 void DSWP::loopSplit(Loop *L) {
-	// cout << "Loop split" << endl;
-
-
-
 	//check for each partition, find relevant blocks, set could auto deduplicate
 
 	for (int i = 0; i < MAX_THREAD; i++) {
@@ -218,6 +265,7 @@ void DSWP::loopSplit(Loop *L) {
 			BBMap[BB] = BasicBlock::Create(*context,
 					BB->getName().str() + "_" + itoa(i), curFunc, newExit);
 		}
+		BBMap[predecessor] = newEntry;
 		BBMap[exit] = newExit;
 
 		if (BBMap[header] == NULL) {
@@ -228,7 +276,7 @@ void DSWP::loopSplit(Loop *L) {
 		BranchInst *newToHeader = BranchInst::Create(BBMap[header], newEntry);
 
 		// return null
-		ReturnInst * newRet = ReturnInst::Create(*context,
+		ReturnInst *newRet = ReturnInst::Create(*context,
 				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit);
 
 		/*
@@ -254,8 +302,6 @@ void DSWP::loopSplit(Loop *L) {
 					newInst->setName(inst->getName() + "_" + itoa(i));
 				}
 
-				// TODO: handle phi nodes here
-
 				// re-point branches and such to new blocks
 				if (isa<TerminatorInst>(newInst)) {
 					// re-point any successor blocks
@@ -280,7 +326,7 @@ void DSWP::loopSplit(Loop *L) {
 								oldBB = postidom[oldBB];
 								newBB = BBMap[oldBB];
 								if (oldBB == NULL) {
-									error("dominator info seems broken :(");
+									error("postdominator info seems broken :(");
 									break;
 								}
 							}
@@ -291,6 +337,30 @@ void DSWP::loopSplit(Loop *L) {
 							// TODO check if there are two branch, one branch
 							// is not in the partition, then what the branch
 						}
+					}
+				}
+				else if (PHINode *phi = dyn_cast<PHINode>(newInst)) {
+					// re-point block predecessors of phi nodes
+					// values will be re-pointed later on
+					for (unsigned int j = 0, je = phi->getNumIncomingValues();
+							j < je; j++) {
+						BasicBlock *oldBB = phi->getIncomingBlock(j);
+						BasicBlock *newBB = BBMap[oldBB];
+
+						// if we're branching from a block not in this thread,
+						// go to the previous dominator of that block
+						// NOTE: is this the right thing to do?
+						while (newBB == NULL) {
+							oldBB = idom[oldBB];
+							newBB = BBMap[oldBB];
+							if (oldBB == NULL) {
+								error("dominator info seems broken :(");
+								break;
+							}
+						}
+
+						// replace the previous target block
+						phi->setIncomingBlock(j, newBB);
 					}
 				}
 
@@ -304,7 +374,7 @@ void DSWP::loopSplit(Loop *L) {
 		}
 
 		/*
-		 * Load the arguments, replacing variables that are live at the start
+		 * Load the arguments, replacing livein variables
 		 */
 		Function::ArgumentListType &arglist = curFunc->getArgumentList();
 		if (arglist.size() != 1) {
@@ -317,162 +387,81 @@ void DSWP::loopSplit(Loop *L) {
 		inHeader->insertBefore(newToHeader);
 
 		BitCastInst *castArgs = new BitCastInst(
-				args, PointerType::get(Type::getInt64Ty(*context), 0));
+				args, PointerType::get(argStructTy, 0), "args");
 		castArgs->insertBefore(newToHeader);
 
 		for (unsigned int j = 0, je = livein.size(); j < je; j++) {
 			cout << "Handling argument: " << livein[j]->getName().str() << endl;
 
 			// get pointer to the jth argument
-			ConstantInt* idx = ConstantInt::get(
-					Type::getInt64Ty(*context), (uint64_t) j);
-			GetElementPtrInst* ele_addr =
-					GetElementPtrInst::Create(castArgs, idx, "");
-			ele_addr->insertBefore(newToHeader);
+			vector<Value *> gep_args;
+			gep_args.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
+			gep_args.push_back(ConstantInt::get(Type::getInt32Ty(*context), j));
+			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
+				castArgs, gep_args, livein[j]->getName() + "_arg", newToHeader);
 
 			// load it
 			LoadInst *ele_val = new LoadInst(ele_addr);
-			ele_val->setAlignment(8);
+			ele_val->setAlignment(8); // TODO do we want this?
 			ele_val->setName(livein[j]->getName().str() + "_val");
 			ele_val->insertBefore(newToHeader);
 
+			/*
 			// debug: show the value
 			vector<Value *> showArg;
 			showArg.push_back(ele_val);
 			Function *show = module->getFunction("showValue");
 			CallInst *callShow = CallInst::Create(show, showArg);
 			callShow->insertBefore(newToHeader);
+			*/
 
-			// cast it to the appropriate type
-			Value *val = livein[j];
-			CastInst *ele_cast;
-			if (val->getType()->isIntegerTy()) {
-				ele_cast = new TruncInst(ele_val, val->getType());
-			} else if (val->getType()->isPointerTy()) {
-				ele_cast = new TruncInst(ele_val, Type::getInt32Ty(*context));
-				ele_cast->insertBefore(newToHeader);
-				ele_cast = new IntToPtrInst(ele_val, val->getType());
-			} else if (val->getType()->isFloatingPointTy()) {
-				if (val->getType()->isFloatTy())
-					error("float type suck");
-				ele_cast  = new BitCastInst(ele_val, val->getType());
-			} else {
-				error("what's the hell of the type");
-				//ele_cast  = new BitCastInst(ele_val, val->getType());
+			if (ele_val->getType() != livein[j]->getType()) {
+				error("broken type for " + livein[j]->getName().str());
 			}
-			ele_cast->insertBefore(newToHeader);
-			instMap[i][val] = ele_cast;
+
+			instMap[i][livein[j]] = ele_val;
 		}
 
 		/*
-		 * Replace the use of intruction def in the function.
+		 * Replace the use of instruction def in the function.
 		 * reg dep should be finished in insert syn
 		 */
 		for (inst_iterator ii = inst_begin(curFunc), ie = inst_end(curFunc);
 				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
-			// TODO: handle phi nodes here
-			for (unsigned int j = 0, je = inst->getNumOperands(); j < je; ++j) {
-				Value *op = inst->getOperand(j);
+			replaceUses(inst, instMap[i]);
+		}
 
-				if (isa<BasicBlock>(op))
-					continue;
+		/*
+		 * Store any liveout variables defined in this thread.
+		 */
+		Type *int32_ty = Type::getInt32Ty(*context),
+		     *int64_ty = Type::getInt64Ty(*context);
 
-				if (Value *newArg = instMap[i][op]) {
-					inst->setOperand(j, newArg);
-				}
+		// get the pointer to the output structure
+		vector<Value *> gep_args;
+		gep_args.push_back(ConstantInt::get(int64_ty, 0));
+		gep_args.push_back(ConstantInt::get(int32_ty, livein.size()));
+		GetElementPtrInst *out_addr = GetElementPtrInst::CreateInBounds(
+			castArgs, gep_args, "load_outs", newRet);
+
+		for (unsigned int j = 0; j < liveout.size(); j++) {
+			if (getInstAssigned(liveout[j]) == i) {
+				// get the pointer where we want to save this
+				gep_args.clear();
+				gep_args.push_back(ConstantInt::get(int64_ty, 0));
+				gep_args.push_back(ConstantInt::get(int32_ty, j));
+				GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
+					out_addr, gep_args, liveout[j]->getName() + "_outptr",
+					newRet);
+
+				// save it
+				StoreInst *store = new StoreInst(
+					instMap[i][liveout[j]], ele_addr, newRet);
 			}
 		}
 	}
 }
-
-
-// note that despite being in step 4, this is actually called after step 5
-void DSWP::clearup(Loop *L, LPPassManager &LPM) {
-
-	/*
-	 * move the produce instructions, which have been inserted after the branch,
-	 * in front of it
-	 */
-	for (int i = 0; i < MAX_THREAD; i++) {
-		for (Function::iterator bi = allFunc[i]->begin(),
-								be = allFunc[i]->end();
-				bi != be; ++bi) {
-			BasicBlock *bb = bi;
-			TerminatorInst *term = NULL;
-			for (BasicBlock::iterator ii = bb->begin(), ie = bb->end();
-					ii != ie; ++ii) {
-				Instruction *inst = ii;
-				if (isa<TerminatorInst>(inst)) {
-					term = dyn_cast<TerminatorInst>(inst);
-					break;
-				}
-			}
-
-			if (term == NULL) {
-				error("term cannot be null");
-			}
-
-			while (true) {
-				Instruction *last = &bb->getInstList().back();
-				if (isa<TerminatorInst>(last))
-					break;
-				last->moveBefore(term);
-			}
-		}
-	}
-
-	cout << "begin to delete loop" << endl;
-	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
-			bi != be; ++bi) {
-		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ii = BB->begin(), i_next, ie = BB->end();
-				ii != ie; ii = i_next) {
-			i_next = ii;
-			++i_next;
-			Instruction &inst = *ii;
-			inst.replaceAllUsesWith(UndefValue::get(inst.getType()));
-			inst.eraseFromParent();
-		}
-	}
-
-	// Delete the basic blocks only afterwards
-	// so that backwards branch instructions don't break
-	for (Loop::block_iterator bi = L->block_begin(), be = L->block_end();
-			bi != be; ++bi) {
-		BasicBlock *BB = *bi;
-		BB->eraseFromParent();
-	}
-
-	LPM.deleteLoopFromQueue(L);
-
-	cout << "clearing metadata" << endl;
-	pdg.clear();
-	rev.clear();
-	scc_dependents.clear();
-	scc_parents.clear();
-	allEdges.clear();
-	InstInSCC.clear();
-	sccId.clear();
-	used.clear();
-	list.clear();
-	assigned.clear();
-	for (int i = 0; i < MAX_THREAD; i++) {
-		part[i].clear();
-		instMap[i].clear();
-	}
-	sccLatency.clear();
-	newToOld.clear();
-	newInstAssigned.clear();
-	allFunc.clear();
-	idom.clear();
-	postidom.clear();
-	livein.clear();
-	defin.clear();
-	liveout.clear();
-	dname.clear();
-}
-
 
 void DSWP::getDominators(Loop *L) {
 	DominatorTree &dom_tree = getAnalysis<DominatorTree>();
@@ -490,71 +479,64 @@ void DSWP::getDominators(Loop *L) {
 }
 
 
-void DSWP::getLiveinfo(Loop * L) {
+void DSWP::getLiveinfo(Loop *L) {
 	defin.clear();
 	livein.clear();
 	liveout.clear();
 
-	//currently I don't want to use standard liveness analysis
+	// Figure out which variables are live.
+	// Don't want to use standard liveness analysis....
+
+	// Find variables defined in the loop, and those that are used outside
+	// the loop.
 	for (Loop::block_iterator bi = L->getBlocks().begin(),
 							  be = L->getBlocks().end();
 			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(), ue = BB->end();
-				ui != ue; ++ui) {
-			Instruction *inst = &(*ui);
+		for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
+				ii != ie; ++ii) {
+			Instruction *inst = &(*ii);
 			if (util.hasNewDef(inst)) {
 				defin.push_back(inst);
 			}
-			for (Instruction::use_iterator oi = inst->use_begin(); oi
-					!= inst->use_end(); oi++) {
-				User *use = *oi;
-				if (Instruction *ins = dyn_cast<Instruction>(use)) {
-					if (!L->contains(ins)) {
-						error("loop defin exist outside the loop");
+			bool already_liveouted = false;
+			for (Instruction::use_iterator ui = inst->use_begin(),
+										   ue = inst->use_end();
+					ui != ue; ++ui) {
+				User *use = *ui;
+				if (Instruction *use_i = dyn_cast<Instruction>(use)) {
+					if (!already_liveouted && !L->contains(use_i)) {
+						liveout.push_back(inst);
+						already_liveouted = true;
 					}
 				} else {
-					error("tell me how could not");
+					error("used by something that's not an instruction???");
 				}
 			}
 		}
 	}
 
-	//make all the use in the loop, but not defin in it, as live in variable
-	for (Loop::block_iterator bi = L->getBlocks().begin(); bi
-			!= L->getBlocks().end(); bi++) {
+	// Anything used in the loop that's not defined in it is a livein variable.
+	for (Loop::block_iterator bi = L->getBlocks().begin(),
+							  be = L->getBlocks().end();
+			bi != be; ++bi) {
 		BasicBlock *BB = *bi;
-		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
-			Instruction *inst = &(*ui);
+		for (BasicBlock::iterator ii = BB->begin(), ie = BB->end();
+				ii != ie; ++ii) {
+			Instruction *inst = &(*ii);
 
-			for (Instruction::op_iterator oi = inst->op_begin(); oi
-					!= inst->op_end(); oi++) {
+			for (Instruction::op_iterator oi = inst->op_begin(),
+										  oe = inst->op_end();
+					oi != oe; ++oi) {
 				Value *op = *oi;
-				if (isa<Instruction> (op) || isa<Argument> (op)) {
-					if (find(defin.begin(), defin.end(), op) == defin.end()) { //variable not defin in loop
-						if (find(livein.begin(), livein.end(), op) == livein.end())	//deduplicate
-							livein.push_back(op);
-					}
+				if ((isa<Instruction>(op) || isa<Argument>(op)) &&
+						find(defin.begin(), defin.end(), op) == defin.end() &&
+						find(livein.begin(), livein.end(), op) == livein.end()) {
+					// the operand is a variable that isn't defined inside the
+					// loop and hasn't already been counted as livein
+					livein.push_back(op);
 				}
 			}
 		}
 	}
-
-	//NOW I DIDN'T SEE WHY WE NEED LIVE OUT
-	//	//so basically I add variables used in loop but not been declared in loop as live variable
-	//
-	//	//I think we could assume liveout = livein + defin at first, especially I havn't understand the use of liveout
-	//	liveout = livein;
-	//	liveout.insert(defin.begin(), defin.end());
-	//
-	//	//now we can delete those in liveout but is not really live outside the loop
-	//	LivenessAnalysis *live = &getAnalysis<LivenessAnalysis>();
-	//	BasicBlock *exit = L->getExitBlock();
-	//
-	//	for (set<Value *>::iterator it = liveout.begin(), it2; it != liveout.end(); it = it2) {
-	//		it2 = it; it2 ++;
-	//		if (!live->isVaribleLiveIn(*it, exit)) {	//livein in the exit is the liveout of the loop
-	//			liveout.erase(it);
-	//		}
-	//	}
 }

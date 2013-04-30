@@ -35,12 +35,14 @@ void DSWP::buildPDG(Loop *L) {
 			Instruction *inst = &(*ui);
 
 			//standardize the name for all expr
+			/*
 			if (util.hasNewDef(inst)) {
 				inst->setName(util.genId());
 				dname[inst] = inst->getName().str();
 			} else {
 				dname[inst] = util.genId();
 			}
+			*/
 
 			pdg[inst] = new vector<Edge>();
 			rev[inst] = new vector<Edge>();
