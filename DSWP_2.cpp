@@ -8,7 +8,7 @@ using namespace std;
 raw_os_ostream outstream(cout);
 
 void DSWP::findSCC(Loop *L) {
-	cout<<">>Starting SCC computation"<<endl;
+	cout<<endl<<endl<<">>Starting SCC computation"<<endl;
 	used.clear();
 
 	for (Loop::block_iterator bi = L->getBlocks().begin();
@@ -35,12 +35,16 @@ void DSWP::findSCC(Loop *L) {
 			sccNum++;
 		}
 	}
+
+	cout<<">>Successfully computed SCCs, with sccNum = "<<sccNum<<endl<<endl;
 }
 
 void DSWP::dfs_forward(Instruction *I) {
-	cout<<">>Calling dfs_forward on [[";
+	/*
+	cout<<">>>>>>Calling dfs_forward on [[";
 	I->print(outstream);
 	cout<<"]]"<<endl;
+	*/
 
 	used[I] = true;
 	for (vector<Edge>::iterator ei = pdg[I]->begin(); ei != pdg[I]->end();
@@ -51,15 +55,19 @@ void DSWP::dfs_forward(Instruction *I) {
 	}
 	list.push_back(I);
 
-	cout<<">>End dfs_forward on [[";
+	/*
+	cout<<">>>>>>End dfs_forward on [[";
 	I->print(outstream);
 	cout<<"]]"<<endl;
+	*/
 }
 
 void DSWP::dfs_reverse(Instruction *I) {
-	cout<<">>Calling dfs_reverse on [[";
+	/*
+	cout<<">>>>>>Calling dfs_reverse on [[";
 	I->print(outstream);
 	cout<<"]]"<<endl;
+	*/
 
 	used[I] = true;
 	for (vector<Edge>::iterator ei = rev[I]->begin(); ei != rev[I]->end(); ei++) {
@@ -71,6 +79,7 @@ void DSWP::dfs_reverse(Instruction *I) {
 			std::pair<int, int> sccedge = std::make_pair(u, sccNum);
 			if (!dag_added[sccedge]) { //No edge between two SCCs yet
 				//Add the edge
+				cout<<">>SCC edge from "<<u<<" to "<<sccNum<<endl;
 				scc_dependents[u].push_back(sccNum);
 				scc_parents[sccNum].push_back(u);
 				dag_added[sccedge] = true;
@@ -79,8 +88,13 @@ void DSWP::dfs_reverse(Instruction *I) {
 	}
 	sccId[I] = sccNum;
 	InstInSCC[sccNum].push_back(I);
+	cout<<">>Adding [[";
+	I->print(outstream);
+	cout<<"]] to SCC #"<<sccNum<<endl;
 
-	cout<<">>End dfs_reverse on [[";
+	/*
+	cout<<">>>>>>End dfs_reverse on [[";
 	I->print(outstream);
 	cout<<"]]"<<endl;
+	*/
 }

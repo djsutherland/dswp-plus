@@ -24,6 +24,10 @@ void DSWP::threadPartition(Loop *L) {
 		}
 	}
 
+	cout<<">>Latencies by SCC:"<<endl;
+	for (int i = 0; i < sccNum; i++)
+		cout<<"SCC #"<<i<<": "<<sccLatency[i]<<endl;
+
 	int averLatency = totalLatency / MAX_THREAD;
 
 	cout << "latency info:" << totalLatency << " " << averLatency << endl;
