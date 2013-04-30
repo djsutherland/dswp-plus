@@ -42,6 +42,10 @@ Example/%.bc: Example/%.cpp
 ### optimizing bitcode
 Example/%-m2r.bc: Example/%.bc
 	opt -mem2reg $< -o $@
+Example/%-o2.bc: Example/%.bc
+	opt -O2 $< -o $@
+Example/%-o3.bc: Example/%.bc
+	opt -O3 $< -o $@
 Example/%-DSWP.bc: Example/%.bc DSWP.so
 	opt -load ./DSWP.so -dswp $< -o $@
 gdb/%: Example/%.bc DSWP.so
