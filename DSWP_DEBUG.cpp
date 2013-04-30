@@ -16,11 +16,11 @@ void DSWP::showGraph(Loop *L) {
 		BasicBlock *BB = *bi;
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
 			Instruction *inst = &(*ui);
-			vector<Edge> * edges = pdg[inst];
+			const vector<Edge> &edges = pdg[inst];
 
 			ost << dname[inst] << " " << *inst << ":\n";
 			ost << "\t";
-			for (vector<Edge>::iterator ei = edges->begin(); ei != edges->end(); ei ++) {
+			for (vector<Edge>::const_iterator ei = edges.begin(); ei != edges.end(); ei ++) {
 				ost << dname[(ei->v)] << "[" << ei->dtype << "]\t";
 			}
 			ost << "\n\n";

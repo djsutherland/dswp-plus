@@ -44,11 +44,12 @@ void DSWP::buildPDG(Loop *L) {
 			}
 			*/
 
-			pdg[inst] = new vector<Edge>();
-			rev[inst] = new vector<Edge>();
+			// initialize vectors
+			pdg[inst];
+			rev[inst];
 		}
 	}
-	
+
 	cout<<">>End basic blocks"<<endl;
 
 	//LoopInfo &li = getAnalysis<LoopInfo>();
