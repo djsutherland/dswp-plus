@@ -76,27 +76,27 @@ private:
 
 	set<Function *> generated;	//all generated function that should not be run in the pass
 
-	//part 0
-	void addEdge(Instruction *u, Instruction *v, DType dtype);
+	// part 0: initial setup and helpers for dependency
+	bool initialize(Loop *L);
 
+	void addEdge(Instruction *u, Instruction *v, DType dtype);
 	bool checkEdge(Instruction *u, Instruction *v);
 
 	//part 1: program dependence graph
 	void buildPDG(Loop *L);
 
 	void checkControlDependence(BasicBlock *a, BasicBlock *b,
-			PostDominatorTree &pdt);
+								PostDominatorTree &pdt);
 
 	void addControlDependence(BasicBlock *a, BasicBlock *b);
 
 	void dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
-						std::vector<BasicBlock *> &ord, Loop *L);
+				  std::vector<BasicBlock *> &ord, Loop *L);
 
 	//part 2: scc and dag
 	void findSCC(Loop *L);
 
 	void dfs_forward(Instruction *inst);
-
 	void dfs_reverse(Instruction *inst);
 
 	//program dependence graph

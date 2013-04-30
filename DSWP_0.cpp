@@ -27,23 +27,12 @@ DSWP::DSWP() : LoopPass (ID){
 }
 
 bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
-	header = L->getHeader();
-	predecessor = L->getLoopPredecessor();
-	exit = L->getExitBlock();
-	func = header->getParent();
+	func = L->getHeader()->getParent();
 	module = func->getParent();
 	context = &module->getContext();
 	eleType = Type::getInt64Ty(*context);
-	loopCounter++;
 
-	if (exit == NULL) {
-		error("exit not unique!");
-	}
-	if (predecessor == NULL) {
-		error("loop predecessor not unique!");
-	}
-
-	Function * produce = module->getFunction("sync_produce");
+	Function *produce = module->getFunction("sync_produce");
 	if (produce == NULL) {	//the first time, we need to link them
 
 		Type *void_ty = Type::getVoidTy(*context),
@@ -108,8 +97,10 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		FunctionType *show3_ft = FunctionType::get(void_ty, show3_arg, false);
 		Function *show3 = Function::Create(show3_ft, Function::ExternalLinkage, "showPtr", module);
 		show3->setCallingConv(CallingConv::C);
+
+		return true;
 	}
-	return true;
+	return false;
 }
 
 void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
@@ -121,6 +112,25 @@ void DSWP::getAnalysisUsage(AnalysisUsage &AU) const {
 	AU.addRequiredTransitive<PostDominatorTree>();
 }
 
+bool DSWP::initialize(Loop *L) {
+	// loop-level initialization. shouldn't do this in doInitialize because
+	// it's not necessarily called immediately before runOnLoop....
+	header = L->getHeader();
+	predecessor = L->getLoopPredecessor();
+	exit = L->getExitBlock();
+	loopCounter++;
+
+	if (exit == NULL) {
+		cerr << "loop exit not unique" << endl;
+		return true;
+	} else if (predecessor == NULL) {
+		cerr << "loop predecessor not unique" << endl;
+		return true;
+	}
+	return false;
+}
+
+
 bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	if (L->getLoopDepth() != 1)	//ONLY care about top level loops
     	return false;
@@ -129,6 +139,11 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 		return false;
 
 	cout << "///////////////////////////// we are running on a loop" << endl;
+
+	bool bad = initialize(L);
+	if (bad) {
+		return false;
+	}
 
 	buildPDG(L);
 	showGraph(L);
