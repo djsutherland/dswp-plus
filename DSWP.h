@@ -16,7 +16,7 @@
 #include "llvm/IRBuilder.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/DerivedTypes.h"
-#include "LivenessAnalysis.h"
+#include "llvm/Support/raw_os_ostream.h"
 
 #include "Utils.h"
 
