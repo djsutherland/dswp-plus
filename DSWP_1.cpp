@@ -43,6 +43,7 @@ void DSWP::buildPDG(Loop *L) {
 		for (BasicBlock::iterator ui = BB->begin(); ui != BB->end(); ui++) {
 			Instruction *inst = &(*ui);
 
+			/*
 			//standardlize the name for all expr
 			if (util.hasNewDef(inst)) {
 				inst->setName(util.genId());
@@ -50,6 +51,7 @@ void DSWP::buildPDG(Loop *L) {
 			} else {
 				dname[inst] = util.genId();
 			}
+			*/
 
 			pdg[inst] = new vector<Edge>();
 			rev[inst] = new vector<Edge>();
