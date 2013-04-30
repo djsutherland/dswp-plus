@@ -17,11 +17,6 @@ void DSWP::dfsVisit(BasicBlock *BB, std::set<BasicBlock *> &vis,
 
 void DSWP::buildPDG(Loop *L) {
 	cout<<">>Building PDG for new loop"<<endl;
-	BasicBlock *bexit = L->getUniqueExitBlock();
-	if (bexit == NULL)
-		cout<<">>No unique exit block"<<endl;
-	else
-		cout<<">>Unique exit block is "<<bexit->getName().str()<<endl;
 	cout<<">>Enumerating blocks"<<endl;
 	raw_os_ostream outstream(cout);
 
