@@ -9,8 +9,7 @@ long long fun(long long a) {
 
 int main() {
     int res;
-    //printf("program start\n");
     res = fun(100000);
-    //printf("program end\n");
+    printf("return value: %d\n", res);
     return 0;
 }
