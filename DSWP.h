@@ -47,6 +47,11 @@ struct Edge {
 	Instruction *u, *v;
 	DType dtype;
 	Edge(Instruction *u, Instruction *v, DType dtype);
+
+	bool operator== (const Edge& rhs) const {
+		return (this->u == rhs.u && this->v == rhs.v 
+				&& this->dtype == rhs.dtype);
+	}
 };
 
 struct QNode {

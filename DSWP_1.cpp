@@ -54,6 +54,7 @@ void DSWP::buildPDG(Loop *L) {
 	/*
 	 * Memory dependence analysis
 	 */
+
 	MemoryDependenceAnalysis &mda = Pass::getAnalysis<MemoryDependenceAnalysis>();
 
 	for (Loop::block_iterator bi = L->getBlocks().begin(); bi != L->getBlocks().end(); bi++) {
@@ -136,6 +137,9 @@ void DSWP::buildPDG(Loop *L) {
 				}
 				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
+			else if (mdr.isClobber()) {
+				cout<<"CLOBBER detected. What should we do?"<<endl;
+			}
 			//end memory dependence
 		}//for ii
 	}//for bi
@@ -152,7 +156,7 @@ void DSWP::buildPDG(Loop *L) {
 	cout<<">>Finding control dependences"<<endl;
 
 	BasicBlock *curheader = L->getHeader();
-	Function *curfunc = header->getParent();
+	Function *curfunc = curheader->getParent();
 	Module *curmodule = curfunc->getParent();
 	LLVMContext *curcontext = &curmodule->getContext();
 	FunctionType *functype = FunctionType::get(Type::getVoidTy(*curcontext),

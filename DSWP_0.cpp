@@ -148,9 +148,14 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 
 
 void DSWP::addEdge(Instruction *u, Instruction *v, DType dtype) {
-	pdg[u]->push_back(Edge(u, v, dtype));
-	allEdges.push_back(Edge(u, v, dtype));
-	rev[v]->push_back(Edge(v, u, dtype));
+	if (std::find(pdg[u]->begin(), pdg[u]->end(), Edge(u, v, dtype)) ==
+				pdg[u]->end()) {
+		pdg[u]->push_back(Edge(u, v, dtype));
+		allEdges.push_back(Edge(u, v, dtype));
+		rev[v]->push_back(Edge(v, u, dtype));
+	}
+	else
+		cout<<">>Skipping the edge, as it has been added already."<<endl;
 }
 
 bool DSWP::checkEdge(Instruction *u, Instruction *v) {
