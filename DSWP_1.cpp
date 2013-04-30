@@ -328,10 +328,11 @@ void DSWP::buildPDG(Loop *L) {
 	cout<<endl;
 
 	//Find blocks from which the loop may be exited
+	// TODO: we've assumed there's only one....
 	SmallVector<BasicBlock *, 10> bb_exits;
 	std::set<BasicBlock *> returnblocks;
 
-	L->getUniqueExitBlocks(bb_exits);
+	L->getExitBlocks(bb_exits);
 	for (SmallVector<BasicBlock *, 10>::iterator it = bb_exits.begin(),
 			 ie = bb_exits.end(); it != ie; ++it) {
 		BasicBlock *bbend = *it;
