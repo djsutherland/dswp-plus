@@ -153,7 +153,8 @@ void DSWP::buildPDG(Loop *L) {
 				}
 				//READ AFTER READ IS INSERT AFTER PDG BUILD
 			}
-			else if (mdr.isClobber()) {
+
+			if (mdr.isClobber()) {
 				error("CLOBBER detected. What should we do?");
 			}
 
