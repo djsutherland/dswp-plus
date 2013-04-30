@@ -5,6 +5,25 @@
 using namespace llvm;
 using namespace std;
 
+inline void replaceUses(PHINode *phi, map<Value*, Value*> repMap) {
+	for (unsigned int j = 0, je = phi->getNumIncomingValues(); j < je; ++j) {
+		Value *val = phi->getIncomingValue(j);
+		if (Value *newArg = repMap[val]) {
+			phi->setIncomingValue(j, newArg);
+		}
+	}
+}
+
+inline void replaceUses(User *user, map<Value*, Value*> repMap) {
+	for (unsigned int j = 0, je = user->getNumOperands(); j < je; ++j) {
+		Value *op = user->getOperand(j);
+		if (Value *newArg = repMap[op]) {
+			user->setOperand(j, newArg);
+		}
+	}
+}
+
+
 void DSWP::preLoopSplit(Loop *L) {
 	// Makes the loop-replacement block that calls the worker threads.
 	allFunc.clear();
@@ -60,14 +79,6 @@ void DSWP::preLoopSplit(Loop *L) {
 	     *int64_ty = Type::getInt64Ty(*context),
 	     *int8_ptr_t = Type::getInt8PtrTy(*context);
 
-	// create a struct type for the arguments
-	vector<Type *> liveinTypes;
-	for (unsigned int i = 0; i < livein.size(); i++) {
-		liveinTypes.push_back(livein[i]->getType());
-	}
-	argStructTy = StructType::create(
-		*context, liveinTypes, "argstruct_" + itoa(loopCounter) + "_ty");
-
 	// types for the functions: void* -> void*, b/c that's what pthreads wants
 	vector<Type *> funArgTy;
 	funArgTy.push_back(int8_ptr_t);
@@ -88,23 +99,46 @@ void DSWP::preLoopSplit(Loop *L) {
 
 
 	/*
-	 * instructions to construct the argument struct
+	 * construct the argument struct
 	 */
 
-	AllocaInst *argStruct = new AllocaInst(
-		argStructTy, "argstruct_" + itoa(loopCounter), brInst);
+	// create a struct type to store the values of liveout vars in
+	vector<Type *> liveoutTypes;
+	for (unsigned int i = 0; i < liveout.size(); i++) {
+		liveoutTypes.push_back(liveout[i]->getType());
+	}
+	StructType *outStructTy = StructType::create(
+		*context, liveoutTypes, "outstruct_" + itoa(loopCounter) + "_ty");
+
+	// create a struct type for the arguments to worker functions
+	vector<Type *> argTypes;
+	for (unsigned int i = 0; i < livein.size(); i++) {
+		argTypes.push_back(livein[i]->getType());
+	}
+	argTypes.push_back(outStructTy);
+	argStructTy = StructType::create(
+		*context, argTypes, "argstruct_" + itoa(loopCounter) + "_ty");
+
+	// allocate the argument struct
+	AllocaInst *argStruct = new AllocaInst(argStructTy, "argstruct", brInst);
+
+	// store the livein arguments
 	for (unsigned int i = 0; i < livein.size(); i++) {
 		// get the element pointer where we're storing this argument
 		vector<Value *> gep_args;
 		gep_args.push_back(ConstantInt::get(int64_ty, 0));
 		gep_args.push_back(ConstantInt::get(int32_ty, i));
 		GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
-			argStruct, gep_args, "", brInst);
+			argStruct, gep_args, livein[i]->getName() + "_argptr", brInst);
 
 		// actually store it
 		StoreInst *storeVal = new StoreInst(livein[i], ele_addr, brInst);
 	}
+	// NOTE: the output argument struct is left uninitialized
 
+	/*
+	 * initialize the communication queues
+	 */
 	Function *init = module->getFunction("sync_init");
 	CallInst *callInit = CallInst::Create(init, "", brInst);
 
@@ -131,6 +165,47 @@ void DSWP::preLoopSplit(Loop *L) {
 	 */
 	Function *join = module->getFunction("sync_join");
 	CallInst *callJoin = CallInst::Create(join, "", brInst);
+
+	/*
+	 * load the liveout variables from the out struct
+	 */
+	if (!liveout.empty()) {
+		// get the pointer to the output structure
+		vector<Value *> gep_args;
+		gep_args.push_back(ConstantInt::get(int64_ty, 0));
+		gep_args.push_back(ConstantInt::get(int32_ty, livein.size()));
+		GetElementPtrInst *out_addr = GetElementPtrInst::CreateInBounds(
+			argStruct, gep_args, "load_outs", brInst);
+
+		map<Value*, Value*> replacement_map;
+
+		for (unsigned int i = 0; i < liveout.size(); i++) {
+			// get the pointer to this out value
+			gep_args.clear();
+			gep_args.push_back(ConstantInt::get(int64_ty, 0));
+			gep_args.push_back(ConstantInt::get(int32_ty, i));
+			GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
+				out_addr, gep_args, liveout[i]->getName() + "_ptr", brInst);
+
+			// load the out value
+			LoadInst *outVal = new LoadInst(
+				ele_addr, liveout[i]->getName() + "_load", brInst);
+
+			replacement_map[liveout[i]] = outVal;
+		}
+
+		// replace any uses *outside of the loop* with this load instruction
+		for (Function::iterator bi = func->begin(), be = func->end();
+				bi != be; ++bi) {
+			BasicBlock &bb = *bi;
+			if (!L->contains(&bb)) {
+				for (BasicBlock::iterator ii = bb.begin(), ie = bb.end();
+						ii != ie; ++ii) {
+					replaceUses(&(*ii), replacement_map);
+				}
+			}
+		}
+	}
 }
 
 
@@ -201,7 +276,7 @@ void DSWP::loopSplit(Loop *L) {
 		BranchInst *newToHeader = BranchInst::Create(BBMap[header], newEntry);
 
 		// return null
-		ReturnInst * newRet = ReturnInst::Create(*context,
+		ReturnInst *newRet = ReturnInst::Create(*context,
 				Constant::getNullValue(Type::getInt8PtrTy(*context)), newExit);
 
 		/*
@@ -312,7 +387,7 @@ void DSWP::loopSplit(Loop *L) {
 		inHeader->insertBefore(newToHeader);
 
 		BitCastInst *castArgs = new BitCastInst(
-				args, PointerType::get(argStructTy, 0));
+				args, PointerType::get(argStructTy, 0), "args");
 		castArgs->insertBefore(newToHeader);
 
 		for (unsigned int j = 0, je = livein.size(); j < je; j++) {
@@ -323,7 +398,7 @@ void DSWP::loopSplit(Loop *L) {
 			gep_args.push_back(ConstantInt::get(Type::getInt64Ty(*context), 0));
 			gep_args.push_back(ConstantInt::get(Type::getInt32Ty(*context), j));
 			GetElementPtrInst* ele_addr = GetElementPtrInst::Create(
-				castArgs, gep_args, "", newToHeader);
+				castArgs, gep_args, livein[j]->getName() + "_arg", newToHeader);
 
 			// load it
 			LoadInst *ele_val = new LoadInst(ele_addr);
@@ -348,36 +423,45 @@ void DSWP::loopSplit(Loop *L) {
 		}
 
 		/*
-		 * Replace the use of intruction def in the function.
+		 * Replace the use of instruction def in the function.
 		 * reg dep should be finished in insert syn
 		 */
 		for (inst_iterator ii = inst_begin(curFunc), ie = inst_end(curFunc);
 				ii != ie; ++ii) {
 			Instruction *inst = &(*ii);
+			replaceUses(inst, instMap[i]);
+		}
 
-			if (PHINode *phi = dyn_cast<PHINode>(inst)) {
-				for (unsigned int j = 0, je = phi->getNumIncomingValues();
-						j < je; ++j) {
-					Value *val = phi->getIncomingValue(j);
-					if (Value *newArg = instMap[i][val]) {
-						phi->setIncomingValue(j, newArg);
-					}
-				}
-			} else {
-				for (unsigned int j = 0, je = inst->getNumOperands();
-						j < je; ++j) {
-					Value *op = inst->getOperand(j);
-					if (isa<BasicBlock>(op))
-						continue;
-					if (Value *newArg = instMap[i][op]) {
-						inst->setOperand(j, newArg);
-					}
-				}
+		/*
+		 * Store any liveout variables defined in this thread.
+		 */
+		Type *int32_ty = Type::getInt32Ty(*context),
+		     *int64_ty = Type::getInt64Ty(*context);
+
+		// get the pointer to the output structure
+		vector<Value *> gep_args;
+		gep_args.push_back(ConstantInt::get(int64_ty, 0));
+		gep_args.push_back(ConstantInt::get(int32_ty, livein.size()));
+		GetElementPtrInst *out_addr = GetElementPtrInst::CreateInBounds(
+			castArgs, gep_args, "load_outs", newRet);
+
+		for (unsigned int j = 0; j < liveout.size(); j++) {
+			if (getInstAssigned(liveout[j]) == i) {
+				// get the pointer where we want to save this
+				gep_args.clear();
+				gep_args.push_back(ConstantInt::get(int64_ty, 0));
+				gep_args.push_back(ConstantInt::get(int32_ty, j));
+				GetElementPtrInst *ele_addr = GetElementPtrInst::CreateInBounds(
+					out_addr, gep_args, liveout[j]->getName() + "_outptr",
+					newRet);
+
+				// save it
+				StoreInst *store = new StoreInst(
+					instMap[i][liveout[j]], ele_addr, newRet);
 			}
 		}
 	}
 }
-
 
 void DSWP::getDominators(Loop *L) {
 	DominatorTree &dom_tree = getAnalysis<DominatorTree>();
