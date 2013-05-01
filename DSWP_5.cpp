@@ -201,7 +201,7 @@ void DSWP::insertConsume(Instruction *u, Instruction *v, DType dtype,
 //       especially due to control dependences...
 
 
-void DSWP::clearup(Loop *L, LPPassManager &LPM) {
+void DSWP::cleanup(Loop *L, LPPassManager &LPM) {
 	// Move some instructions that may not have been inserted in the right
 	// place, delete the old loop, and clean up our aux data structures for this
 	// loop.
@@ -290,13 +290,30 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 
 	LPM.deleteLoopFromQueue(L);
 
-	cout << "clearing metadata" << endl;
+}
+
+void DSWP::clear() {
+	module = NULL;
+	func = NULL;
+	header = NULL;
+	predecessor = NULL;
+	exit = NULL;
+	context = NULL;
+	eleType = NULL;
+	replaceBlock = NULL;
+	argStructTy = NULL;
+
+	sccNum = 0;
+
 	pdg.clear();
 	rev.clear();
 	scc_dependents.clear();
 	scc_parents.clear();
+	dag_added.clear();
 	allEdges.clear();
 	InstInSCC.clear();
+	idom.clear();
+	postidom.clear();
 	sccId.clear();
 	used.clear();
 	list.clear();
@@ -310,8 +327,6 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	newToOld.clear();
 	newInstAssigned.clear();
 	allFunc.clear();
-	idom.clear();
-	postidom.clear();
 	livein.clear();
 	defin.clear();
 	liveout.clear();

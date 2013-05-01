@@ -27,42 +27,41 @@ DSWP::DSWP() : LoopPass (ID){
 }
 
 bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
-	func = L->getHeader()->getParent();
-	module = func->getParent();
-	context = &module->getContext();
-	eleType = Type::getInt64Ty(*context);
+	Module *mod = L->getHeader()->getParent()->getParent();
 
-	Function *produce = module->getFunction("sync_produce");
+	Function *produce = mod->getFunction("sync_produce");
 	if (produce == NULL) {	//the first time, we need to link them
 
-		Type *void_ty = Type::getVoidTy(*context),
-		     *int32_ty = Type::getInt32Ty(*context),
-		     *int64_ty = Type::getInt64Ty(*context),
-		     *int8_ptr_ty = Type::getInt8PtrTy(*context);
+		LLVMContext &ctx = mod->getContext();
+		Type *void_ty = Type::getVoidTy(ctx),
+		     *int32_ty = Type::getInt32Ty(ctx),
+		     *int64_ty = Type::getInt64Ty(ctx),
+		     *int8_ptr_ty = Type::getInt8PtrTy(ctx),
+		     *elTy = int64_ty;
 
 		//add sync_produce function
 		vector<Type *> produce_arg;
-		produce_arg.push_back(eleType);
+		produce_arg.push_back(elTy);
 		produce_arg.push_back(int32_ty);
 		FunctionType *produce_ft = FunctionType::get(void_ty, produce_arg, false);
-		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", module);
+		produce = Function::Create(produce_ft, Function::ExternalLinkage, "sync_produce", mod);
 		produce->setCallingConv(CallingConv::C);
 
 		//add syn_consume function
 		vector<Type *> consume_arg;
 		consume_arg.push_back(int32_ty);
-		FunctionType *consume_ft = FunctionType::get(eleType, consume_arg, false);
-		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", module);
+		FunctionType *consume_ft = FunctionType::get(elTy, consume_arg, false);
+		Function *consume = Function::Create(consume_ft, Function::ExternalLinkage, "sync_consume", mod);
 		consume->setCallingConv(CallingConv::C);
 
 		//add sync_join
 		FunctionType *join_ft = FunctionType::get(void_ty, false);
-		Function *join = Function::Create(join_ft, Function::ExternalLinkage, "sync_join", module);
+		Function *join = Function::Create(join_ft, Function::ExternalLinkage, "sync_join", mod);
 		join->setCallingConv(CallingConv::C);
 
 		//add sync_init
 		FunctionType *init_ft = FunctionType::get(void_ty, false);
-		Function *init = Function::Create(init_ft, Function::ExternalLinkage, "sync_init", module);
+		Function *init = Function::Create(init_ft, Function::ExternalLinkage, "sync_init", mod);
 		init->setCallingConv(CallingConv::C);
 
 		//add sync_delegate
@@ -75,27 +74,27 @@ bool DSWP::doInitialization(Loop *L, LPPassManager &LPM) {
 		delegate_arg.push_back(PointerType::get(argFun, 0));
 		delegate_arg.push_back(int8_ptr_ty);
 		FunctionType *delegate_ft = FunctionType::get(void_ty, delegate_arg, false);
-		Function *delegate = Function::Create(delegate_ft, Function::ExternalLinkage, "sync_delegate", module);
+		Function *delegate = Function::Create(delegate_ft, Function::ExternalLinkage, "sync_delegate", mod);
 		delegate->setCallingConv(CallingConv::C);
 
 		//add show value
 		vector<Type *> show_arg;
 		show_arg.push_back(int64_ty);
 		FunctionType *show_ft = FunctionType::get(void_ty, show_arg, false);
-		Function *show = Function::Create(show_ft, Function::ExternalLinkage, "showValue", module);
+		Function *show = Function::Create(show_ft, Function::ExternalLinkage, "showValue", mod);
 		show->setCallingConv(CallingConv::C);
 
 		//add showPlace value
 		vector<Type *> show2_arg;
 		FunctionType *show2_ft = FunctionType::get(void_ty, show2_arg, false);
-		Function *show2 = Function::Create(show2_ft, Function::ExternalLinkage, "showPlace", module);
+		Function *show2 = Function::Create(show2_ft, Function::ExternalLinkage, "showPlace", mod);
 		show2->setCallingConv(CallingConv::C);
 
 		//add showPtr value
 		vector<Type *> show3_arg;
 		show3_arg.push_back(int8_ptr_ty);
 		FunctionType *show3_ft = FunctionType::get(void_ty, show3_arg, false);
-		Function *show3 = Function::Create(show3_ft, Function::ExternalLinkage, "showPtr", module);
+		Function *show3 = Function::Create(show3_ft, Function::ExternalLinkage, "showPtr", mod);
 		show3->setCallingConv(CallingConv::C);
 
 		return true;
@@ -116,6 +115,11 @@ bool DSWP::initialize(Loop *L) {
 	// loop-level initialization. shouldn't do this in doInitialize because
 	// it's not necessarily called immediately before runOnLoop....
 	header = L->getHeader();
+	func = header->getParent();
+	module = func->getParent();
+	context = &module->getContext();
+	eleType = Type::getInt64Ty(*context);
+
 	predecessor = L->getLoopPredecessor();
 	exit = L->getExitBlock();
 	loopCounter++;
@@ -142,6 +146,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 
 	bool bad = initialize(L);
 	if (bad) {
+		clear();
 		return false;
 	}
 
@@ -151,6 +156,7 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 
 	if (sccNum == 1) {
 		cout << "only one SCC, can't do nuttin" << endl;
+		clear();
 		return false;
 	}
 
@@ -165,7 +171,8 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	preLoopSplit(L);
 	loopSplit(L);
 	insertSynchronization(L);
-	clearup(L, LPM);
+	cleanup(L, LPM);
+	clear();
 	cout << "//////////////////////////// we finsih run on a loop " << endl;
 	return true;
 }

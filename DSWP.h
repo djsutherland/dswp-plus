@@ -157,8 +157,6 @@ private:
 	void loopSplit(Loop *L);
 	StructType *argStructTy; // the type of the struct that worker threads get
 
-	void clearup(Loop *L, LPPassManager &LPM);
-
 	// map from old instructions to new instuction, by thread
 	map<Value *, Value *> instMap[MAX_THREAD];
 
@@ -191,6 +189,9 @@ private:
 
 	void insertConsume(Instruction * u, Instruction *v, DType dtype,
 			int channel, int uthread, int vthread);
+
+	void cleanup(Loop *L, LPPassManager &LPM);
+	void clear();
 
 	//test function
 	void showGraph(Loop *L);
