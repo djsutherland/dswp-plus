@@ -310,38 +310,55 @@ void DSWP::loopSplit(Loop *L) {
 				}
 
 				// re-point branches and such to new blocks
-				if (isa<TerminatorInst>(newInst)) {
-					// re-point any successor blocks
-					for (unsigned int j = 0, je = newInst->getNumOperands();
-							j < je; j++) {
-						Value *op = newInst->getOperand(j);
+				if (TerminatorInst *newT = dyn_cast<TerminatorInst>(newInst)) {
+					unsigned int num_suc = newT->getNumSuccessors();
 
-						if (BasicBlock *oldBB = dyn_cast<BasicBlock>(op)) {
-							BasicBlock *newBB = BBMap[oldBB];
+					// re-point successor blocks
+					for (unsigned int j = 0; j < num_suc; j++) {
+						BasicBlock *oldBB = newT->getSuccessor(j);
+						BasicBlock *newBB = BBMap[oldBB];
 
-							if (oldBB != exit && !L->contains(oldBB)) {
-								// branching to a block outside the loop that's
-								// not the exit. this should be impossible...
-								error("crazy branch :(");
-								continue;
+						if (oldBB != exit && !L->contains(oldBB)) {
+							// branching to a block outside the loop that's
+							// not the exit. this should be impossible...
+							error("crazy branch :(");
+							continue;
+						}
+
+						// if we branched to a block not in this thread,
+						// go to the next post-dominator
+						// NOTE: right?
+						while (newBB == NULL) {
+							oldBB = postidom[oldBB];
+							newBB = BBMap[oldBB];
+							if (oldBB == NULL) {
+								error("postdominator info seems broken :(");
+								break;
 							}
+						}
 
-							// if we branched to a block not in this thread,
-							// go to the next post-dominator
-							// NOTE: right?
-							while (newBB == NULL) {
-								oldBB = postidom[oldBB];
-								newBB = BBMap[oldBB];
-								if (oldBB == NULL) {
-									error("postdominator info seems broken :(");
-									break;
-								}
+						// replace the target
+						newT->setSuccessor(j, newBB);
+					}
+
+					// Is this a branch, switch, or indirect branch that now
+					// always goes to the same block regardless of the
+					// comparison value? If so, make it unconditional.
+					if (num_suc > 0 && !isa<InvokeInst>(newT)) {
+						BasicBlock *target = newT->getSuccessor(0);
+						for (unsigned int j = 1; j < num_suc; j++) {
+							BasicBlock *t = newT->getSuccessor(j);
+							if (t != target) {
+								target = NULL;
+								break;
 							}
-
-							// replace the target block
-							newInst->setOperand(j, newBB);
+						}
+						if (target != NULL) {
+							delete newInst;
+							newInst = BranchInst::Create(target);
 						}
 					}
+
 				} else if (PHINode *phi = dyn_cast<PHINode>(newInst)) {
 					// re-point block predecessors of phi nodes
 					// values will be re-pointed later on
