@@ -394,7 +394,7 @@ void DSWP::buildPDG(Loop *L) {
 					BasicBlock *destblock1;
 					BasicBlock *destblock2 = realtodummy[bsucc].second;
 
-					if (instnum[bsucc] < instnum[*it]) //points to earlier block
+					if (instnum[bsucc] <= instnum[*it]) //points to earlier block
 						destblock1 = realtodummy[bsucc].second;
 					else //points to a latter block
 						destblock1 = realtodummy[bsucc].first;
