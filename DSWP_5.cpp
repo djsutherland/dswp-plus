@@ -14,9 +14,9 @@ void DSWP::insertSynchronization(Loop *L) {
 
 		int utr = getInstAssigned(e.u);
 
-		for (int vtr = 0; vtr < MAX_THREAD; vtr++) {
-			if (vtr == utr)
-				continue;
+		for (int vtr = utr + 1; vtr < MAX_THREAD; vtr++) {
+			// Legal produce/consume dependences only go *upwards* in thread
+			// counts. If it goes the other way, fuhgeddaboutit.
 
 			Value *vu = instMap[utr][e.u];
 			Value *vv = instMap[vtr][e.v];
