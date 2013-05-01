@@ -5,6 +5,8 @@
 *.d
 *.bc
 *.bc.ll
+*.bc.ll.ps
+*.bc.ll.pdf
 *.out
 
 dag
