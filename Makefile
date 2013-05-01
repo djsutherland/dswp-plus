@@ -63,7 +63,7 @@ Example/%.bc.ll.pdf: Example/%.bc.ll.ps
 Example/%.o: Example/%.bc
 	clang -O0 -c $< -o $@
 Example/%.out: Example/%.bc runtime/libruntime.a
-	clang -O0 -pthread $< runtime/libruntime.a -o $@
+	clang -O0 -pthread $< runtime/libruntime.a -lm -o $@
 run/%: Example/%.out
 	$<
 time/%: Example/%.out
