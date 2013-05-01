@@ -61,7 +61,7 @@ void DSWP::insertProduce(Instruction *u, Instruction *v, DType dtype,
 		CastInst *cast;
 
 		if (u->getType()->isIntegerTy()) {
-			cast = new SExtInst(u, eleType, u->getName().str() + "_64");
+			cast = new ZExtInst(u, eleType, u->getName().str() + "_64");
 		} else if (u->getType()->isFloatingPointTy()) {
 			if (u->getType()->isFloatTy()) {
 				cout << "WARNING: float sucks?";
