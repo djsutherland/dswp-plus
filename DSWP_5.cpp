@@ -132,7 +132,6 @@ void DSWP::insertConsume(Instruction *u, Instruction *v, DType dtype,
 		cast->insertBefore(v);
 
 		// replace the uses
-
 		for (Instruction::use_iterator ui = oldu->use_begin(), ue = oldu->use_end();
 				ui != ue; ++ui) {
 
@@ -146,12 +145,10 @@ void DSWP::insertConsume(Instruction *u, Instruction *v, DType dtype,
 				continue;
 			}
 
-			for (unsigned int i = 0; i < user->getNumOperands(); i++) {
-				Value * op = user->getOperand(i);
-				if (op == oldu) {
-					user->setOperand(i, cast);
-				}
-			}
+			// call replaceUses so that it handles phi nodes
+			map<Value *, Value *> reps;
+			reps[oldu] = cast;
+			replaceUses(user, reps);
 		}
 
 	} /* TODO: need to handle true memory dependences more than just syncing?

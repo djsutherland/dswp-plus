@@ -5,24 +5,6 @@
 using namespace llvm;
 using namespace std;
 
-inline void replaceUses(PHINode *phi, map<Value*, Value*> repMap) {
-	for (unsigned int j = 0, je = phi->getNumIncomingValues(); j < je; ++j) {
-		Value *val = phi->getIncomingValue(j);
-		if (Value *newArg = repMap[val]) {
-			phi->setIncomingValue(j, newArg);
-		}
-	}
-}
-
-inline void replaceUses(User *user, map<Value*, Value*> repMap) {
-	for (unsigned int j = 0, je = user->getNumOperands(); j < je; ++j) {
-		Value *op = user->getOperand(j);
-		if (Value *newArg = repMap[op]) {
-			user->setOperand(j, newArg);
-		}
-	}
-}
-
 
 void DSWP::preLoopSplit(Loop *L) {
 	// Makes the loop-replacement block that calls the worker threads.
