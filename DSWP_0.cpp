@@ -148,6 +148,12 @@ bool DSWP::runOnLoop(Loop *L, LPPassManager &LPM) {
 	buildPDG(L);
 	showGraph(L);
 	findSCC(L);
+
+	if (sccNum == 1) {
+		cout << "only one SCC, can't do nuttin" << endl;
+		return false;
+	}
+
 	showDAG(L);
 	threadPartition(L);
 	showPartition(L);
