@@ -484,6 +484,9 @@ void DSWP::loopSplit(Loop *L) {
 }
 
 void DSWP::getDominators(Loop *L) {
+	// TODO: if we're running DSWP on more than one loop in a single function,
+	//       this will be invalidated the second time through and segfault when
+	//       getNode(BB) returns null for loop-replace.
 	DominatorTree &dom_tree = getAnalysis<DominatorTree>();
 	PostDominatorTree &postdom_tree = getAnalysis<PostDominatorTree>();
 
