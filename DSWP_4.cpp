@@ -340,13 +340,9 @@ void DSWP::loopSplit(Loop *L) {
 
 							// replace the target block
 							newInst->setOperand(j, newBB);
-
-							// TODO check if there are two branch, one branch
-							// is not in the partition, then what the branch
 						}
 					}
-				}
-				else if (PHINode *phi = dyn_cast<PHINode>(newInst)) {
+				} else if (PHINode *phi = dyn_cast<PHINode>(newInst)) {
 					// re-point block predecessors of phi nodes
 					// values will be re-pointed later on
 					for (unsigned int j = 0, je = phi->getNumIncomingValues();
