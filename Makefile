@@ -56,6 +56,10 @@ valgrind/%: Example/%.bc DSWP.so
 ### (dis)assembling bitcode
 Example/%.bc.ll: Example/%.bc
 	llvm-dis $< -o $@
+Example/%.bc.ll.ps: Example/%.bc.ll
+	enscript $< -q -E -fCourier10 --tabsize=4 -p $@
+Example/%.bc.ll.pdf: Example/%.bc.ll.ps
+	ps2pdf $< $@
 Example/%.o: Example/%.bc
 	clang -O0 -c $< -o $@
 Example/%.out: Example/%.bc runtime/libruntime.a
