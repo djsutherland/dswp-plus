@@ -103,13 +103,20 @@ void DSWP::insertProduce(Instruction *u, Instruction *v, DType dtype,
 
 void DSWP::insertConsume(Instruction *u, Instruction *v, DType dtype,
 					     int channel, int uthread, int vthread) {
-	Value *oldu = newToOld[u];
+	Instruction *oldu = dyn_cast<Instruction>(newToOld[u]);
+	Instruction *insPos = placeEquivalents[vthread][oldu];
+	if (insPos == NULL) {
+		insPos = dyn_cast<Instruction>(instMap[vthread][oldu]);
+		if (insPos == NULL) {
+			error("can't insert nowhere");
+		}
+	}
 
 	// call sync_consume(channel)
 	Function *fun = module->getFunction("sync_consume");
 	vector<Value *> args;
 	args.push_back(ConstantInt::get(Type::getInt32Ty(*context), channel));
-	CallInst *call = CallInst::Create(fun, args, "c" + itoa(channel), v);
+	CallInst *call = CallInst::Create(fun, args, "c" + itoa(channel), insPos);
 
 	if (dtype == REG) {
 		CastInst *cast;
@@ -129,10 +136,11 @@ void DSWP::insertConsume(Instruction *u, Instruction *v, DType dtype,
 			error("what's the hell type");
 		}
 
-		cast->insertBefore(v);
+		cast->insertBefore(insPos);
 
 		// replace the uses
-		for (Instruction::use_iterator ui = oldu->use_begin(), ue = oldu->use_end();
+		for (Instruction::use_iterator ui = oldu->use_begin(),
+									   ue = oldu->use_end();
 				ui != ue; ++ui) {
 
 			Instruction *user = dyn_cast<Instruction>(*ui);
@@ -296,6 +304,7 @@ void DSWP::clearup(Loop *L, LPPassManager &LPM) {
 	for (int i = 0; i < MAX_THREAD; i++) {
 		part[i].clear();
 		instMap[i].clear();
+		placeEquivalents[i].clear();
 	}
 	sccLatency.clear();
 	newToOld.clear();

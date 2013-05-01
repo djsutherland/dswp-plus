@@ -271,6 +271,8 @@ void DSWP::loopSplit(Loop *L) {
 		/*
 		 * copy over the instructions in each block
 		 */
+		typedef SmallVector<Instruction *, 5> to_point_t;
+		to_point_t instructions_to_point;
 		for (set<BasicBlock *>::iterator bi = relbb.begin(), be = relbb.end();
 				bi != be; bi++) {
 			BasicBlock *BB = *bi;
@@ -281,8 +283,12 @@ void DSWP::loopSplit(Loop *L) {
 				Instruction *inst = ii;
 
 				if (assigned[sccId[inst]] != i && !isa<TerminatorInst>(inst)) {
-					// TODO I NEED TO CHECK THIS BACK
-					// NOTE: that's is from the original code. what'd he mean?
+					// We're not actually inserting this function, but we want
+					// to keep track of where it would have gone. We'll point it
+					// at the next instruction we actually do insert. (Note
+					// we'll always actually insert these, because at a minimum
+					// we're inserting the terminator from this block.)
+					instructions_to_point.push_back(inst);
 					continue;
 				}
 
@@ -372,6 +378,18 @@ void DSWP::loopSplit(Loop *L) {
 
 				//newInst->dump();
 				NBB->getInstList().push_back(newInst);
+
+				for (to_point_t::iterator pi = instructions_to_point.begin(),
+										  pe = instructions_to_point.end();
+						pi != pe; ++pi) {
+					Instruction *p = *pi;
+					placeEquivalents[i][p] = newInst;
+				}
+				instructions_to_point.clear();
+			}
+
+			if (!instructions_to_point.empty()) {
+				error("didn't point all the instructions we wanted to");
 			}
 		}
 
