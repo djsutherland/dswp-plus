@@ -1,5 +1,6 @@
 #include <pthread.h>
 #include <stdio.h>
+#include <time.h>
 #include "queue.h"
 #include "simple_sync.h"
 
@@ -8,16 +9,16 @@ static queue_t data_queues[NUM_QUEUES] = {};
 
 
 void sync_produce(unsigned long long elem, int val_id) {
-	//printf("%lld\n", elem);
-	//printf("produce in %d\n", val_id);
+    time_t rawtime;
+    time(&rawtime);
+    printf("%lld: produce on queue %d: %lld\n", (long long) rawtime, val_id, elem);
 	queue_push(&data_queues[val_id], elem);
 }
 
 unsigned long long sync_consume(int val_id) {
-//	unsigned long long res = queue_pop(&data_queues[val_id]);
-// printf("consume in %d\n", val_id);
-//	printf("%lld\n", res);
-//	return res;
+    time_t rawtime;
+    time(&rawtime);
+    printf("%lld: consume on queue %d\n", (long long) rawtime, val_id);
 	return queue_pop(&data_queues[val_id]);
 }
 
